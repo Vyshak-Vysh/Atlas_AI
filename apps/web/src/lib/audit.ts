@@ -1,0 +1,92 @@
+import {
+  Activity,
+  CheckCircle2,
+  FileText,
+  Link2,
+  LogIn,
+  Plug,
+  Search,
+  Shield,
+  Sparkles,
+  Trash2,
+  Upload,
+  UserPlus,
+  XCircle,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+export const AUDIT_EVENT_LABELS: Record<string, string> = {
+  ACCESS_DENIED: "Access denied",
+  LOGIN_SUCCEEDED: "Signed in",
+  LOGIN_FAILED: "Sign-in failed",
+  TOKEN_REFRESHED: "Session refreshed",
+  TENANT_CREATED: "Workspace created",
+  PROJECT_CREATED: "Project created",
+  PROJECT_MEMBER_ADDED: "Project member added",
+  TENANT_MEMBER_ADDED: "Workspace member added",
+  MEMBER_ROLE_UPDATED: "Member role updated",
+  MEMBER_REMOVED: "Member removed",
+  SOURCE_CONNECTED: "Source connected",
+  SOURCE_SYNCED: "Source synced",
+  SOURCE_SYNC_FAILED: "Source sync failed",
+  SOURCE_DELETED: "Source deleted",
+  CONNECTOR_CREATED: "Connector connected",
+  CONNECTOR_REVOKED: "Connector revoked",
+  DOCUMENT_UPLOADED: "Document uploaded",
+  DOCUMENT_REJECTED: "Document rejected",
+  EVIDENCE_SEARCHED: "Evidence searched",
+  AGENT_RUN_STARTED: "Investigation started",
+  AGENT_RUN_STEP: "Investigation step",
+  AGENT_RUN_COMPLETED: "Investigation completed",
+  AGENT_RUN_FAILED: "Investigation failed",
+  FINDING_CREATED: "Finding created",
+  ACTION_PROPOSED: "Action proposed",
+  ACTION_APPROVED: "Action approved",
+  ACTION_REJECTED: "Action rejected",
+  ACTION_EXECUTED: "Action executed",
+  ACTION_EXECUTION_FAILED: "Action execution failed",
+  EXPORT_CREATED: "Report exported",
+  REPORT_GENERATED: "Report generated",
+  RETENTION_TOMBSTONED: "Data retention applied",
+  REQUIREMENT_CREATED: "Requirement created",
+};
+
+export const AUDIT_EVENT_ICONS: Record<string, LucideIcon> = {
+  ACCESS_DENIED: Shield,
+  LOGIN_SUCCEEDED: LogIn,
+  LOGIN_FAILED: Shield,
+  TENANT_CREATED: Sparkles,
+  PROJECT_CREATED: FileText,
+  PROJECT_MEMBER_ADDED: UserPlus,
+  TENANT_MEMBER_ADDED: UserPlus,
+  MEMBER_ROLE_UPDATED: UserPlus,
+  MEMBER_REMOVED: Trash2,
+  SOURCE_CONNECTED: Plug,
+  SOURCE_SYNCED: Plug,
+  SOURCE_SYNC_FAILED: XCircle,
+  SOURCE_DELETED: Trash2,
+  CONNECTOR_CREATED: Plug,
+  CONNECTOR_REVOKED: Plug,
+  DOCUMENT_UPLOADED: Upload,
+  DOCUMENT_REJECTED: XCircle,
+  EVIDENCE_SEARCHED: Search,
+  AGENT_RUN_STARTED: Sparkles,
+  AGENT_RUN_COMPLETED: CheckCircle2,
+  AGENT_RUN_FAILED: XCircle,
+  FINDING_CREATED: Sparkles,
+  ACTION_PROPOSED: Link2,
+  ACTION_APPROVED: CheckCircle2,
+  ACTION_REJECTED: XCircle,
+  ACTION_EXECUTED: CheckCircle2,
+  ACTION_EXECUTION_FAILED: XCircle,
+  REPORT_GENERATED: FileText,
+  REQUIREMENT_CREATED: FileText,
+};
+
+export function auditEventLabel(eventType: string): string {
+  return AUDIT_EVENT_LABELS[eventType] ?? eventType.replaceAll("_", " ").toLowerCase();
+}
+
+export function auditEventIcon(eventType: string): LucideIcon {
+  return AUDIT_EVENT_ICONS[eventType] ?? Activity;
+}

@@ -1,0 +1,183 @@
+name: atlasai
+
+x-env: &common-env
+  env_file:
+    - .env
+
+# Host-oriented values in .env (localhost:5432, etc.) are for Alembic/pytest
+# run directly on the host. Containers instead resolve services by their
+# compose service name, so every in-network service overrides those
+# specific vars here — `environment:` wins over `env_file:` in Compose.
+x-in-network-env: &in-network-env
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-atlasai}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-atlasai}
+  DATABASE_URL_SYNC: postgresql+psycopg://${POSTGRES_USER:-atlasai}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-atlasai}
+  REDIS_URL: redis://redis:6379/0
+  OBJECT_STORE_ENDPOINT_URL: http://minio:9000
+  EMBEDDER_BASE_URL: http://embedder:8090
+  CLAMAV_HOST: clamav
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    <<: *common-env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-atlasai}
+      POSTGRES_USER: ${POSTGRES_USER:-atlasai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports:
+      # Host port 15432 — deliberately far from 5432/5433/5434 and from any
+      # other project's Postgres port on this machine (this dev machine has
+      # a native Windows Postgres on 5432, plus other Dockerized projects'
+      # Postgres containers on other ports). Containers still reach this
+      # service at postgres:5432 on Atlas's own internal Docker network
+      # (atlasai_default) — that never changes, only the host-side mapping.
+      - "15432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/migrations/docker-initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-atlasai} -d ${POSTGRES_DB:-atlasai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      # Host port 6380 to avoid ambiguity with WSL's own loopback use of
+      # 6379 on this machine. Containers reach this service at redis:6379.
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    <<: *common-env
+    environment:
+      MINIO_ROOT_USER: ${OBJECT_STORE_ACCESS_KEY:-change-me}
+      MINIO_ROOT_PASSWORD: ${OBJECT_STORE_SECRET_KEY:-change-me}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    <<: *common-env
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${OBJECT_STORE_ACCESS_KEY:-change-me} ${OBJECT_STORE_SECRET_KEY:-change-me} &&
+      mc mb -p local/${OBJECT_STORE_BUCKET_RAW:-atlasai-raw-sources} &&
+      mc mb -p local/${OBJECT_STORE_BUCKET_EXTRACTED:-atlasai-extracted-text} &&
+      exit 0
+      "
+    restart: "no"
+
+  clamav:
+    image: clamav/clamav:stable
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "echo PING | nc -w 3 localhost 3310 | grep -q PONG"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s
+
+  embedder:
+    build:
+      context: .
+      dockerfile: apps/ai_atlas/Dockerfile.embedder
+    <<: *common-env
+    environment:
+      <<: *in-network-env
+    volumes:
+      - embedder_model_cache:/root/.cache
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    <<: *common-env
+    environment:
+      <<: *in-network-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./infra/migrations:/app/infra/migrations
+    command: ["uvicorn", "atlasai_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  ai_atlas_worker:
+    build:
+      context: .
+      dockerfile: apps/ai_atlas/Dockerfile
+    <<: *common-env
+    environment:
+      <<: *in-network-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      embedder:
+        condition: service_healthy
+    command: ["celery", "-A", "ai_atlas.celery_app", "worker", "--loglevel=INFO", "--concurrency=4"]
+
+  ai_atlas_beat:
+    build:
+      context: .
+      dockerfile: apps/ai_atlas/Dockerfile
+    <<: *common-env
+    environment:
+      <<: *in-network-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["celery", "-A", "ai_atlas.celery_app", "beat", "--loglevel=INFO"]
+
+  web:
+    build:
+      context: ./apps/web
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${WEB_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  clamav_data:
+  embedder_model_cache:

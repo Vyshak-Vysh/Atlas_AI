@@ -1,0 +1,35 @@
+[project]
+name = "ai-atlas"
+version = "0.1.0"
+description = "AtlasAI data-plane runtime: Celery workers, connector sync, agent-run executor, and the embedding microservice."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "celery>=5.4",
+  "redis>=5.2",
+  "httpx>=0.28",
+  "structlog>=24.4",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "atlasai-domain",
+  "atlasai-db",
+  "atlasai-security",
+  "atlasai-retrieval",
+  "atlasai-connectors",
+  "atlasai-llm-gateway",
+]
+
+[project.optional-dependencies]
+# Only installed in Dockerfile.embedder — kept out of the Celery worker
+# image so the worker doesn't carry a multi-hundred-MB torch install it
+# never needs.
+embedder = [
+  "sentence-transformers>=3.1",
+  "torch>=2.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_atlas"]

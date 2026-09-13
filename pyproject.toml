@@ -1,0 +1,120 @@
+[project]
+name = "atlasai"
+version = "0.1.0"
+description = "AtlasAI — evidence-backed enterprise project intelligence platform"
+requires-python = ">=3.12,<3.13"
+readme = "README.md"
+dependencies = []
+
+[tool.uv.workspace]
+members = [
+  "apps/api",
+  "apps/ai_atlas",
+  "packages/domain",
+  "packages/db",
+  "packages/retrieval",
+  "packages/connectors",
+  "packages/llm_gateway",
+  "packages/evaluation",
+  "packages/security",
+]
+
+[tool.uv.sources]
+atlasai-domain = { workspace = true }
+atlasai-db = { workspace = true }
+atlasai-retrieval = { workspace = true }
+atlasai-connectors = { workspace = true }
+atlasai-llm-gateway = { workspace = true }
+atlasai-evaluation = { workspace = true }
+atlasai-security = { workspace = true }
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=6.0",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "httpx>=0.28",
+  "faker>=33.0",
+  "types-python-dateutil",
+  "types-pyyaml",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["apps/api/src", "apps/ai_atlas/src", "packages/*/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S"]
+# S101: asserts are fine in this codebase's tests.
+# UP046: PEP 695 generic syntax is a style preference, not adopted here —
+# `Generic[T]` base classes stay for now for readability.
+ignore = ["S101", "UP046"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's Depends()/Query()/etc. as default argument values is the
+# idiomatic pattern the framework requires — not the mutable-default-
+# argument bug B008 exists to catch.
+extend-immutable-calls = [
+  "fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body", "fastapi.Header",
+  "fastapi.Form", "fastapi.File",
+]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+strict = true
+warn_unused_ignores = true
+exclude = ["tests/"]
+explicit_package_bases = true
+mypy_path = [
+  "apps/api/src",
+  "apps/ai_atlas/src",
+  "packages/domain/src",
+  "packages/db/src",
+  "packages/retrieval/src",
+  "packages/connectors/src",
+  "packages/llm_gateway/src",
+  "packages/evaluation/src",
+  "packages/security/src",
+]
+
+[[tool.mypy.overrides]]
+# Third-party libraries with no bundled type stubs and no maintained
+# stub package pinned here. Application code around each is still checked
+# in full — only the library's own surface is treated as untyped.
+module = [
+  "boto3.*",
+  "botocore.*",
+  "pgvector.*",
+  "pytesseract.*",
+  "fitz.*",
+  "webvtt.*",
+  "srt.*",
+  "filetype.*",
+  "googleapiclient.*",
+  "google_auth_oauthlib.*",
+  "google.auth.*",
+  "celery.*",
+  "clamd.*",
+  "openpyxl.*",
+  "sentence_transformers.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# A single event loop for the whole test session, matching the lifetime of
+# the @lru_cache'd async engine/sessionmaker in atlasai_db.engine — a
+# per-test-function loop (pytest-asyncio's default) breaks that engine's
+# pooled asyncpg connections on Windows the moment a second test tries to
+# reuse a connection bound to the first test's already-closed loop.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+markers = [
+  "integration: requires a running Postgres/Redis/MinIO stack",
+  "evaluation: runs the fixture-driven evaluation harness",
+]
