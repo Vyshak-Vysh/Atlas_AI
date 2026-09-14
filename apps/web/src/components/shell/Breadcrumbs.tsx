@@ -19,7 +19,7 @@ const LABELS: Record<string, string> = {
   team: "Team",
   audit: "Audit log",
   settings: "Settings",
-  requirements: "Requirements",
+  requirements: "Tasks",
   investigations: "Investigations",
   activity: "Activity",
   organization: "Organization",
@@ -38,7 +38,7 @@ const ENTITY_LABELS: Record<string, string> = {
   investigations: "Investigation",
   findings: "Finding",
   approvals: "Approval",
-  requirements: "Requirement",
+  requirements: "Task",
 };
 
 export function Breadcrumbs() {

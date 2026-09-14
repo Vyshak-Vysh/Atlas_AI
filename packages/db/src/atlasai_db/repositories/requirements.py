@@ -12,7 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from atlasai_db.exceptions import NotFoundError
-from atlasai_db.models.requirements import Claim, Decision, DeliveryRecord, Requirement, RequirementEvidence
+from atlasai_db.models.requirements import (
+    Claim,
+    Decision,
+    DeliveryRecord,
+    Requirement,
+    RequirementComment,
+    RequirementEvidence,
+)
+from atlasai_db.models.tenancy import User
 from atlasai_db.repositories.base import ProjectScopedRepository
 
 
@@ -30,13 +38,25 @@ class RequirementRepository(ProjectScopedRepository[Requirement]):
         return list(result.scalars().all())
 
     async def list_for_project(
-        self, *, status: str | None = None, phase_id: uuid.UUID | None = None
+        self,
+        *,
+        status: str | None = None,
+        phase_id: uuid.UUID | None = None,
+        task_status: str | None = None,
+        priority: str | None = None,
+        assignee_id: uuid.UUID | None = None,
     ) -> list[Requirement]:
         query = self._scoped_query().order_by(Requirement.key)
         if status is not None:
             query = query.where(Requirement.status == status)
         if phase_id is not None:
             query = query.where(Requirement.phase_id == phase_id)
+        if task_status is not None:
+            query = query.where(Requirement.task_status == task_status)
+        if priority is not None:
+            query = query.where(Requirement.priority == priority)
+        if assignee_id is not None:
+            query = query.where(Requirement.assignee_id == assignee_id)
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
@@ -58,6 +78,7 @@ class RequirementRepository(ProjectScopedRepository[Requirement]):
     async def create(
         self, *, key: str, title: str, status: str, phase_id: uuid.UUID | None = None,
         description: str | None = None, acceptance_criteria: list[Any] | None = None,
+        task_status: str = "TO_DO", priority: str = "NORMAL", assignee_id: uuid.UUID | None = None,
     ) -> Requirement:
         requirement = Requirement(
             project_id=self.project_id,
@@ -67,8 +88,72 @@ class RequirementRepository(ProjectScopedRepository[Requirement]):
             description=description,
             status=status,
             acceptance_criteria=acceptance_criteria or [],
+            task_status=task_status,
+            priority=priority,
+            assignee_id=assignee_id,
         )
         return await self.add(requirement)
+
+    async def update(self, requirement: Requirement, **fields: Any) -> Requirement:
+        """Generic partial update: `fields` should already be the caller's
+        `exclude_unset=True` dump, so an explicit `None` (e.g. clearing
+        assignee_id/phase_id) is applied, not skipped."""
+        for name, value in fields.items():
+            setattr(requirement, name, value)
+        await self.session.flush()
+        # Explicit refresh (not just flush) so the server-side `onupdate`
+        # value for `updated_at` is loaded into the object while still
+        # inside an awaited call — reading an unloaded attribute later,
+        # synchronously, would raise SQLAlchemy's MissingGreenlet error.
+        await self.session.refresh(requirement)
+        return requirement
+
+    async def delete(self, requirement: Requirement) -> None:
+        await self.session.delete(requirement)
+        await self.session.flush()
+
+
+class RequirementCommentRepository:
+    """Plain (non project-scoped) repository — comments are always reached
+    through an already project-scoped parent Requirement, same pattern as
+    RequirementEvidenceRepository below."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def create(self, *, requirement_id: uuid.UUID, author_id: uuid.UUID, body: str) -> RequirementComment:
+        comment = RequirementComment(requirement_id=requirement_id, author_id=author_id, body=body)
+        self.session.add(comment)
+        await self.session.flush()
+        return comment
+
+    async def list_for_requirement(self, requirement_id: uuid.UUID) -> list[tuple[RequirementComment, User]]:
+        query = (
+            select(RequirementComment, User)
+            .join(User, User.id == RequirementComment.author_id)
+            .where(RequirementComment.requirement_id == requirement_id)
+            .order_by(RequirementComment.created_at)
+        )
+        result = await self.session.execute(query)
+        return [(comment, author) for comment, author in result.all()]
+
+    async def get_by_id(self, comment_id: uuid.UUID) -> RequirementComment:
+        query = select(RequirementComment).where(RequirementComment.id == comment_id)
+        result = await self.session.execute(query)
+        row = result.scalar_one_or_none()
+        if row is None:
+            raise NotFoundError(RequirementComment.__name__, comment_id)
+        return row
+
+    async def update(self, comment: RequirementComment, *, body: str) -> RequirementComment:
+        comment.body = body
+        await self.session.flush()
+        await self.session.refresh(comment)
+        return comment
+
+    async def delete(self, comment: RequirementComment) -> None:
+        await self.session.delete(comment)
+        await self.session.flush()
 
 
 class RequirementEvidenceRepository:

@@ -104,6 +104,32 @@ class RequirementStatus(StrEnum):
     REJECTED = "REJECTED"
 
 
+class TaskStatus(StrEnum):
+    """Day-to-day task workflow state for a Requirement, tracked in the
+    `requirements.task_status` column.
+
+    This is a SEPARATE axis from `RequirementStatus`: `RequirementStatus`
+    answers "is this in scope and has evidence verified its delivery?";
+    `TaskStatus` answers "where is this item on the team's kanban board
+    right now?". The two must never be merged into one enum — a
+    requirement can be `TaskStatus.DONE` from the assignee's point of view
+    while still `RequirementStatus.NOT_VERIFIED` until evidence confirms it.
+    """
+
+    TO_DO = "TO_DO"
+    IN_PROGRESS = "IN_PROGRESS"
+    IN_REVIEW = "IN_REVIEW"
+    DONE = "DONE"
+    BLOCKED = "BLOCKED"
+
+
+class TaskPriority(StrEnum):
+    URGENT = "URGENT"
+    HIGH = "HIGH"
+    NORMAL = "NORMAL"
+    LOW = "LOW"
+
+
 class ClaimType(StrEnum):
     SCOPE_STATEMENT = "SCOPE_STATEMENT"
     DELIVERY_STATEMENT = "DELIVERY_STATEMENT"
@@ -218,6 +244,11 @@ class AuditEventType(StrEnum):
     MEMBER_ROLE_UPDATED = "MEMBER_ROLE_UPDATED"
     MEMBER_REMOVED = "MEMBER_REMOVED"
     REQUIREMENT_CREATED = "REQUIREMENT_CREATED"
+    REQUIREMENT_UPDATED = "REQUIREMENT_UPDATED"
+    REQUIREMENT_DELETED = "REQUIREMENT_DELETED"
+    REQUIREMENT_COMMENT_ADDED = "REQUIREMENT_COMMENT_ADDED"
+    REQUIREMENT_COMMENT_UPDATED = "REQUIREMENT_COMMENT_UPDATED"
+    REQUIREMENT_COMMENT_DELETED = "REQUIREMENT_COMMENT_DELETED"
     REPORT_GENERATED = "REPORT_GENERATED"
     DOCUMENT_UPLOADED = "DOCUMENT_UPLOADED"
     DOCUMENT_REJECTED = "DOCUMENT_REJECTED"

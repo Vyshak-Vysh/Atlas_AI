@@ -192,11 +192,25 @@ Columns:
 - `key varchar(80) not null`
 - `title varchar(300) not null`
 - `description text`
-- `status varchar(40) not null`
+- `status varchar(40) not null` — evidence-verification lifecycle (see `atlasai_domain.enums.RequirementStatus`)
 - `acceptance_criteria jsonb not null default '[]'::jsonb`
+- `task_status varchar(20) not null default 'TO_DO'` — day-to-day task board state (see `atlasai_domain.enums.TaskStatus`); a SEPARATE axis from `status` above, never merged with it
+- `priority varchar(20) not null default 'NORMAL'` — see `atlasai_domain.enums.TaskPriority`
+- `assignee_id uuid references users(id) on delete set null`
 - `created_at timestamptz not null default now()`
 - `updated_at timestamptz not null default now()`
 - Unique: `(project_id, key)`
+- Indexes: `(project_id, status)`, `(phase_id)`, `(project_id, task_status)`, `(project_id, priority)`, `(assignee_id)`
+
+### requirement_comments
+
+- `id uuid primary key default gen_random_uuid()`
+- `requirement_id uuid not null references requirements(id) on delete cascade`
+- `author_id uuid not null references users(id) on delete restrict`
+- `body text not null`
+- `created_at timestamptz not null default now()`
+- `updated_at timestamptz not null default now()`
+- Index: `(requirement_id, created_at)`
 
 ### requirement_evidence
 

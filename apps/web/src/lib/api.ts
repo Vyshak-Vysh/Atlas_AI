@@ -14,7 +14,9 @@ import type {
   ProjectOverviewResponse,
   ProjectReportResponse,
   ProjectResponse,
+  RequirementCommentResponse,
   RequirementDetailResponse,
+  RequirementHistoryEntryResponse,
   RequirementResponse,
   SourceRecordResponse,
   SyncRunResponse,
@@ -270,15 +272,34 @@ export const api = {
       query: { project_id: projectId },
     }),
 
-  // --- Requirements --------------------------------------------------------
-  listRequirements: (projectId: string, status?: string, phaseId?: string) =>
+  // --- Requirements (tasks) --------------------------------------------------
+  listRequirements: (
+    projectId: string,
+    filters?: { status?: string; phaseId?: string; taskStatus?: string; priority?: string; assigneeId?: string },
+  ) =>
     request<RequirementResponse[]>("/api/v1/requirements", {
-      query: { project_id: projectId, status, phase_id: phaseId },
+      query: {
+        project_id: projectId,
+        status: filters?.status,
+        phase_id: filters?.phaseId,
+        task_status: filters?.taskStatus,
+        priority: filters?.priority,
+        assignee_id: filters?.assigneeId,
+      },
     }),
 
   createRequirement: (
     projectId: string,
-    body: { key: string; title: string; status: string; phase_id?: string; description?: string },
+    body: {
+      key: string;
+      title: string;
+      status: string;
+      phase_id?: string;
+      description?: string;
+      task_status?: string;
+      priority?: string;
+      assignee_id?: string;
+    },
   ) =>
     request<RequirementResponse>("/api/v1/requirements", {
       method: "POST",
@@ -288,6 +309,59 @@ export const api = {
 
   getRequirement: (requirementId: string, projectId: string) =>
     request<RequirementDetailResponse>(`/api/v1/requirements/${requirementId}`, {
+      query: { project_id: projectId },
+    }),
+
+  updateRequirement: (
+    requirementId: string,
+    projectId: string,
+    body: {
+      title?: string;
+      description?: string | null;
+      status?: string;
+      phase_id?: string | null;
+      acceptance_criteria?: unknown[];
+      task_status?: string;
+      priority?: string;
+      assignee_id?: string | null;
+    },
+  ) =>
+    request<RequirementResponse>(`/api/v1/requirements/${requirementId}`, {
+      method: "PATCH",
+      query: { project_id: projectId },
+      json: body,
+    }),
+
+  deleteRequirement: (requirementId: string, projectId: string) =>
+    request<void>(`/api/v1/requirements/${requirementId}`, { method: "DELETE", query: { project_id: projectId } }),
+
+  listRequirementComments: (requirementId: string, projectId: string) =>
+    request<RequirementCommentResponse[]>(`/api/v1/requirements/${requirementId}/comments`, {
+      query: { project_id: projectId },
+    }),
+
+  addRequirementComment: (requirementId: string, projectId: string, body: { body: string }) =>
+    request<RequirementCommentResponse>(`/api/v1/requirements/${requirementId}/comments`, {
+      method: "POST",
+      query: { project_id: projectId },
+      json: body,
+    }),
+
+  updateRequirementComment: (requirementId: string, commentId: string, projectId: string, body: { body: string }) =>
+    request<RequirementCommentResponse>(`/api/v1/requirements/${requirementId}/comments/${commentId}`, {
+      method: "PATCH",
+      query: { project_id: projectId },
+      json: body,
+    }),
+
+  deleteRequirementComment: (requirementId: string, commentId: string, projectId: string) =>
+    request<void>(`/api/v1/requirements/${requirementId}/comments/${commentId}`, {
+      method: "DELETE",
+      query: { project_id: projectId },
+    }),
+
+  getRequirementHistory: (requirementId: string, projectId: string) =>
+    request<RequirementHistoryEntryResponse[]>(`/api/v1/requirements/${requirementId}/history`, {
       query: { project_id: projectId },
     }),
 

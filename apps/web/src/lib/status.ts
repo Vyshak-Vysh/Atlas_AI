@@ -78,6 +78,42 @@ const PHASE_STATUS: Record<string, StatusDisplay> = {
   CANCELLED: { label: "Cancelled", className: "status-superseded" },
 };
 
+// Day-to-day task board state — a separate axis from REQUIREMENT_STATUS
+// above (evidence-verification lifecycle). Keep these two displays
+// visually distinct wherever both appear (see the requirements list page).
+const TASK_STATUS: Record<string, StatusDisplay> = {
+  TO_DO: { label: "To do", className: "status-not-verified" },
+  IN_PROGRESS: { label: "In progress", className: "status-pending-approval" },
+  IN_REVIEW: { label: "In review", className: "status-ambiguous" },
+  DONE: { label: "Done", className: "status-in-scope" },
+  BLOCKED: { label: "Blocked", className: "status-out-of-scope" },
+};
+
+export const TASK_STATUS_COLUMNS: { value: string; label: string }[] = [
+  { value: "TO_DO", label: "To do" },
+  { value: "IN_PROGRESS", label: "In progress" },
+  { value: "IN_REVIEW", label: "In review" },
+  { value: "DONE", label: "Done" },
+  { value: "BLOCKED", label: "Blocked" },
+];
+
+const TASK_PRIORITY: Record<string, { label: string; variant: "danger" | "warning" | "info" | "neutral" }> = {
+  URGENT: { label: "Urgent", variant: "danger" },
+  HIGH: { label: "High", variant: "warning" },
+  NORMAL: { label: "Normal", variant: "info" },
+  LOW: { label: "Low", variant: "neutral" },
+};
+
+export const TASK_PRIORITIES = ["URGENT", "HIGH", "NORMAL", "LOW"] as const;
+
+export function taskStatusDisplay(value: string): StatusDisplay {
+  return lookup(TASK_STATUS, value);
+}
+
+export function taskPriorityDisplay(value: string): { label: string; variant: "danger" | "warning" | "info" | "neutral" } {
+  return TASK_PRIORITY[value] ?? { label: value.replaceAll("_", " "), variant: "neutral" };
+}
+
 function lookup(map: Record<string, StatusDisplay>, value: string): StatusDisplay {
   return map[value] ?? { label: value.replaceAll("_", " "), className: "status-not-verified" };
 }

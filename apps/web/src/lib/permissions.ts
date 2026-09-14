@@ -17,7 +17,12 @@ export type Permission =
   | "MANAGE_CONNECTORS"
   | "MANAGE_POLICIES"
   | "VIEW_AUDIT_LOG"
-  | "MANAGE_PROJECT_MEMBERS";
+  | "MANAGE_PROJECT_MEMBERS"
+  | "CREATE_TASK"
+  | "EDIT_TASK"
+  | "DELETE_TASK"
+  | "ASSIGN_TASK"
+  | "COMMENT_ON_TASK";
 
 const ALL_PERMISSIONS: Permission[] = [
   "VIEW_PROJECT",
@@ -31,7 +36,16 @@ const ALL_PERMISSIONS: Permission[] = [
   "MANAGE_POLICIES",
   "VIEW_AUDIT_LOG",
   "MANAGE_PROJECT_MEMBERS",
+  "CREATE_TASK",
+  "EDIT_TASK",
+  "DELETE_TASK",
+  "ASSIGN_TASK",
+  "COMMENT_ON_TASK",
 ];
+
+// Every role except CLIENT_VIEWER gets full task read/write, ClickUp-style
+// — mirrors packages/security/src/atlasai_security/rbac.py exactly.
+const TASK_WRITE_PERMISSIONS: Permission[] = ["CREATE_TASK", "EDIT_TASK", "DELETE_TASK", "ASSIGN_TASK", "COMMENT_ON_TASK"];
 
 const ROLE_PERMISSIONS: Record<MembershipRole, Permission[]> = {
   AI_ENGINEER_ADMIN: ALL_PERMISSIONS,
@@ -44,11 +58,12 @@ const ROLE_PERMISSIONS: Record<MembershipRole, Permission[]> = {
     "APPROVE_ACTION",
     "VIEW_AUDIT_LOG",
     "MANAGE_PROJECT_MEMBERS",
+    ...TASK_WRITE_PERMISSIONS,
   ],
-  CEO_SALES: ["VIEW_PROJECT", "RUN_AGENT", "VIEW_AUDIT_LOG"],
-  DELIVERY_TEAM: ["VIEW_PROJECT", "VIEW_INTERNAL_EVIDENCE", "UPLOAD_DOCUMENT", "RUN_AGENT"],
+  CEO_SALES: ["VIEW_PROJECT", "RUN_AGENT", "VIEW_AUDIT_LOG", ...TASK_WRITE_PERMISSIONS],
+  DELIVERY_TEAM: ["VIEW_PROJECT", "VIEW_INTERNAL_EVIDENCE", "UPLOAD_DOCUMENT", "RUN_AGENT", ...TASK_WRITE_PERMISSIONS],
   CLIENT_VIEWER: ["VIEW_PROJECT"],
-  WORKER: ["SYNC_SOURCE", "UPLOAD_DOCUMENT"],
+  WORKER: ["SYNC_SOURCE", "UPLOAD_DOCUMENT", ...TASK_WRITE_PERMISSIONS],
 };
 
 export function roleHasPermission(role: MembershipRole | undefined, permission: Permission): boolean {

@@ -34,3 +34,28 @@ def test_worker_cannot_approve_actions_or_run_agent() -> None:
 def test_project_manager_can_approve_actions() -> None:
     assert role_has_permission(MembershipRole.PROJECT_MANAGER, Permission.APPROVE_ACTION)
     assert not role_has_permission(MembershipRole.PROJECT_MANAGER, Permission.MANAGE_CONNECTORS)
+
+
+_TASK_PERMISSIONS = (
+    Permission.CREATE_TASK,
+    Permission.EDIT_TASK,
+    Permission.DELETE_TASK,
+    Permission.ASSIGN_TASK,
+    Permission.COMMENT_ON_TASK,
+)
+
+
+def test_client_viewer_cannot_write_tasks() -> None:
+    """CLIENT_VIEWER is view-only across the whole task board — it must
+    never gain create/edit/delete/assign/comment rights on a task."""
+    for permission in _TASK_PERMISSIONS:
+        assert not role_has_permission(MembershipRole.CLIENT_VIEWER, permission)
+
+
+def test_every_non_client_viewer_role_can_fully_manage_tasks() -> None:
+    """Every other project role gets full task read/write, ClickUp-style."""
+    for role in MembershipRole:
+        if role is MembershipRole.CLIENT_VIEWER:
+            continue
+        for permission in _TASK_PERMISSIONS:
+            assert role_has_permission(role, permission), f"{role} should have {permission}"

@@ -14,6 +14,25 @@ class CreateRequirementRequest(BaseModel):
     phase_id: uuid.UUID | None = None
     description: str | None = None
     acceptance_criteria: list[Any] = Field(default_factory=list)
+    task_status: str = "TO_DO"
+    priority: str = "NORMAL"
+    assignee_id: uuid.UUID | None = None
+
+
+class UpdateRequirementRequest(BaseModel):
+    """All fields optional; the router calls `.model_dump(exclude_unset=True)`
+    so a field the client omits is left untouched, while a field sent as
+    explicit `null` (e.g. `assignee_id`, `phase_id`) is actually cleared —
+    plain `None`-means-unchanged can't express that distinction."""
+
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    description: str | None = None
+    status: str | None = None
+    phase_id: uuid.UUID | None = None
+    acceptance_criteria: list[Any] | None = None
+    task_status: str | None = None
+    priority: str | None = None
+    assignee_id: uuid.UUID | None = None
 
 
 class RequirementResponse(BaseModel):
@@ -25,6 +44,9 @@ class RequirementResponse(BaseModel):
     description: str | None
     status: str
     acceptance_criteria: list[Any]
+    task_status: str
+    priority: str
+    assignee_id: uuid.UUID | None
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
@@ -55,3 +77,35 @@ class RequirementDetailResponse(BaseModel):
     requirement: RequirementResponse
     evidence_links: list[RequirementEvidenceLinkResponse]
     delivery_records: list[DeliveryRecordResponse]
+
+
+class CreateCommentRequest(BaseModel):
+    body: str = Field(min_length=1)
+
+
+class UpdateCommentRequest(BaseModel):
+    body: str = Field(min_length=1)
+
+
+class RequirementCommentResponse(BaseModel):
+    id: uuid.UUID
+    requirement_id: uuid.UUID
+    author_id: uuid.UUID
+    author_display_name: str
+    author_email: str
+    body: str
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+
+class RequirementHistoryEntryResponse(BaseModel):
+    id: uuid.UUID
+    event_type: str
+    field: str | None
+    old_value: Any | None
+    new_value: Any | None
+    actor_id: uuid.UUID | None
+    actor_display_name: str | None
+    actor_email: str | None
+    created_at: datetime.datetime
+    metadata: dict[str, Any]

@@ -27,7 +27,26 @@ class Permission(StrEnum):
     MANAGE_POLICIES = "MANAGE_POLICIES"
     VIEW_AUDIT_LOG = "VIEW_AUDIT_LOG"
     MANAGE_PROJECT_MEMBERS = "MANAGE_PROJECT_MEMBERS"
+    CREATE_TASK = "CREATE_TASK"
+    EDIT_TASK = "EDIT_TASK"
+    DELETE_TASK = "DELETE_TASK"
+    ASSIGN_TASK = "ASSIGN_TASK"
+    COMMENT_ON_TASK = "COMMENT_ON_TASK"
 
+
+# Every role except CLIENT_VIEWER gets full task read/write rights — per
+# product decision, CLIENT_VIEWER is view-only across the whole task board
+# (it still sees tasks and their history via plain project membership,
+# which is never permission-gated; see routers/requirements.py).
+_TASK_WRITE_PERMISSIONS = frozenset(
+    {
+        Permission.CREATE_TASK,
+        Permission.EDIT_TASK,
+        Permission.DELETE_TASK,
+        Permission.ASSIGN_TASK,
+        Permission.COMMENT_ON_TASK,
+    }
+)
 
 _ROLE_PERMISSIONS: dict[MembershipRole, frozenset[Permission]] = {
     MembershipRole.PROJECT_MANAGER: frozenset(
@@ -41,6 +60,7 @@ _ROLE_PERMISSIONS: dict[MembershipRole, frozenset[Permission]] = {
             Permission.VIEW_AUDIT_LOG,
             Permission.MANAGE_PROJECT_MEMBERS,
         }
+        | _TASK_WRITE_PERMISSIONS
     ),
     MembershipRole.AI_ENGINEER_ADMIN: frozenset(set(Permission)),  # full access, incl. elevated/destructive ops
     MembershipRole.CEO_SALES: frozenset(
@@ -49,6 +69,7 @@ _ROLE_PERMISSIONS: dict[MembershipRole, frozenset[Permission]] = {
             Permission.RUN_AGENT,
             Permission.VIEW_AUDIT_LOG,
         }
+        | _TASK_WRITE_PERMISSIONS
     ),
     MembershipRole.DELIVERY_TEAM: frozenset(
         {
@@ -57,6 +78,7 @@ _ROLE_PERMISSIONS: dict[MembershipRole, frozenset[Permission]] = {
             Permission.UPLOAD_DOCUMENT,
             Permission.RUN_AGENT,
         }
+        | _TASK_WRITE_PERMISSIONS
     ),
     MembershipRole.CLIENT_VIEWER: frozenset({Permission.VIEW_PROJECT}),  # never VIEW_INTERNAL_EVIDENCE — BR-016
     MembershipRole.WORKER: frozenset(
@@ -64,6 +86,7 @@ _ROLE_PERMISSIONS: dict[MembershipRole, frozenset[Permission]] = {
             Permission.SYNC_SOURCE,
             Permission.UPLOAD_DOCUMENT,
         }
+        | _TASK_WRITE_PERMISSIONS
     ),
 }
 

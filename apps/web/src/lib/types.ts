@@ -48,6 +48,13 @@ export type RequirementStatus =
   | "CANCELLED"
   | "REJECTED";
 
+// Day-to-day task-board workflow — a SEPARATE axis from RequirementStatus
+// above (evidence-verification lifecycle). Never merge the two: a task can
+// be TaskStatus.DONE from the assignee's point of view while its
+// RequirementStatus is still NOT_VERIFIED until evidence confirms it.
+export type TaskStatus = "TO_DO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "BLOCKED";
+export type TaskPriority = "URGENT" | "HIGH" | "NORMAL" | "LOW";
+
 export type AgentRunStatus = "RECEIVED" | "RUNNING" | "WAITING_APPROVAL" | "COMPLETED" | "FAILED" | "CANCELLED";
 
 export type FindingStatus =
@@ -363,6 +370,9 @@ export interface RequirementResponse {
   description: string | null;
   status: string;
   acceptance_criteria: unknown[];
+  task_status: string;
+  priority: string;
+  assignee_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -389,6 +399,30 @@ export interface RequirementDetailResponse {
   requirement: RequirementResponse;
   evidence_links: RequirementEvidenceLinkResponse[];
   delivery_records: DeliveryRecordResponse[];
+}
+
+export interface RequirementCommentResponse {
+  id: string;
+  requirement_id: string;
+  author_id: string;
+  author_display_name: string;
+  author_email: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RequirementHistoryEntryResponse {
+  id: string;
+  event_type: string;
+  field: string | null;
+  old_value: unknown;
+  new_value: unknown;
+  actor_id: string | null;
+  actor_display_name: string | null;
+  actor_email: string | null;
+  created_at: string;
+  metadata: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------

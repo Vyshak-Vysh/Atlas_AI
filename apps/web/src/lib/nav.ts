@@ -36,7 +36,7 @@ export const SETTINGS_NAV: NavItem = { href: "/app/settings", label: "Settings",
 export function projectNav(projectId: string): NavItem[] {
   return [
     { href: `/app/projects/${projectId}/overview`, label: "Overview", icon: LayoutDashboard },
-    { href: `/app/projects/${projectId}/requirements`, label: "Requirements", icon: ClipboardList },
+    { href: `/app/projects/${projectId}/requirements`, label: "Tasks", icon: ClipboardList },
     { href: `/app/projects/${projectId}/evidence`, label: "Evidence", icon: FileSearch },
     { href: `/app/projects/${projectId}/investigations`, label: "Investigations", icon: Sparkles },
     { href: `/app/projects/${projectId}/findings`, label: "Findings", icon: FileText },

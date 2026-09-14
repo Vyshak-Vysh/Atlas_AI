@@ -4,6 +4,8 @@ import {
   FileText,
   Link2,
   LogIn,
+  MessageSquare,
+  Pencil,
   Plug,
   Search,
   Shield,
@@ -48,7 +50,12 @@ export const AUDIT_EVENT_LABELS: Record<string, string> = {
   EXPORT_CREATED: "Report exported",
   REPORT_GENERATED: "Report generated",
   RETENTION_TOMBSTONED: "Data retention applied",
-  REQUIREMENT_CREATED: "Requirement created",
+  REQUIREMENT_CREATED: "Task created",
+  REQUIREMENT_UPDATED: "Task updated",
+  REQUIREMENT_DELETED: "Task deleted",
+  REQUIREMENT_COMMENT_ADDED: "Comment added",
+  REQUIREMENT_COMMENT_UPDATED: "Comment edited",
+  REQUIREMENT_COMMENT_DELETED: "Comment deleted",
 };
 
 export const AUDIT_EVENT_ICONS: Record<string, LucideIcon> = {
@@ -81,6 +88,11 @@ export const AUDIT_EVENT_ICONS: Record<string, LucideIcon> = {
   ACTION_EXECUTION_FAILED: XCircle,
   REPORT_GENERATED: FileText,
   REQUIREMENT_CREATED: FileText,
+  REQUIREMENT_UPDATED: Pencil,
+  REQUIREMENT_DELETED: Trash2,
+  REQUIREMENT_COMMENT_ADDED: MessageSquare,
+  REQUIREMENT_COMMENT_UPDATED: MessageSquare,
+  REQUIREMENT_COMMENT_DELETED: Trash2,
 };
 
 export function auditEventLabel(eventType: string): string {
