@@ -5,6 +5,7 @@ import {
   FileSearch,
   FileText,
   FolderKanban,
+  Kanban,
   LayoutDashboard,
   Plug,
   Settings,
@@ -22,6 +23,7 @@ export interface NavItem {
 export const PRIMARY_NAV: NavItem[] = [
   { href: "/app/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/app/projects", label: "Projects", icon: FolderKanban },
+  { href: "/app/project-space", label: "Project Space", icon: Kanban },
   { href: "/app/evidence", label: "Evidence", icon: FileSearch },
   { href: "/app/findings", label: "Findings", icon: Sparkles },
   { href: "/app/approvals", label: "Approvals", icon: CheckSquare },

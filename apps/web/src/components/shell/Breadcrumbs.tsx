@@ -20,6 +20,7 @@ const LABELS: Record<string, string> = {
   audit: "Audit log",
   settings: "Settings",
   requirements: "Tasks",
+  "project-space": "Project Space",
   investigations: "Investigations",
   activity: "Activity",
   organization: "Organization",
