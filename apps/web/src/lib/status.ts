@@ -157,6 +157,7 @@ export const AGENT_STATE_LABELS: Record<string, string> = {
   RECEIVED: "Received",
   CLASSIFY: "Classifying question",
   PLAN: "Planning retrieval",
+  INVESTIGATE: "Investigating evidence",
   RETRIEVE: "Searching evidence",
   RERANK: "Ranking evidence",
   ANALYZE: "Analyzing",
@@ -171,10 +172,16 @@ export const AGENT_STATE_LABELS: Record<string, string> = {
   FAILED: "Failed",
 };
 
+// The order the run timeline renders states in. INVESTIGATE (the
+// tool-calling loop) and RETRIEVE (the deterministic single-shot search)
+// are alternatives to each other — a run enters one or the other, never
+// both — so both appear here and the timeline simply skips whichever the
+// run did not use.
 export const AGENT_STEP_ORDER = [
   "RECEIVED",
   "CLASSIFY",
   "PLAN",
+  "INVESTIGATE",
   "RETRIEVE",
   "RERANK",
   "ANALYZE",

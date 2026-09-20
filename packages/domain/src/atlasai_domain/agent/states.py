@@ -1,8 +1,16 @@
 """Agent state enum and transition table (ATLASAI_MASTER_SPEC.md §4).
 
 Main flow:
-    RECEIVED -> CLASSIFY -> PLAN -> RETRIEVE -> RERANK -> ANALYZE
+    RECEIVED -> CLASSIFY -> PLAN -> INVESTIGATE -> RERANK -> ANALYZE
     -> VERIFY -> FINDING -> ACTION_DECISION -> COMPLETE
+
+INVESTIGATE is the bounded tool-calling loop (agent/tools.py): the model
+chooses which allowlisted read tools to call and with what arguments, and
+the loop runs until it stops requesting tools or a budget is spent.
+RETRIEVE is the deterministic single-shot alternative to it (one hybrid
+search per planned subquery, no model in the loop) and remains legal from
+PLAN so a run can be forced down the cheaper path via
+`agent_runs.model_policy`; both converge on RERANK.
 
 Action branch:
     ACTION_DECISION -> PROPOSE_ACTION -> WAIT_APPROVAL -> EXECUTE -> COMPLETE
@@ -21,6 +29,7 @@ class AgentState(StrEnum):
     RECEIVED = "RECEIVED"
     CLASSIFY = "CLASSIFY"
     PLAN = "PLAN"
+    INVESTIGATE = "INVESTIGATE"
     RETRIEVE = "RETRIEVE"
     RERANK = "RERANK"
     ANALYZE = "ANALYZE"
@@ -43,7 +52,8 @@ TERMINAL_STATES: frozenset[AgentState] = frozenset({AgentState.COMPLETE, AgentSt
 TRANSITION_TABLE: dict[AgentState, frozenset[AgentState]] = {
     AgentState.RECEIVED: frozenset({AgentState.CLASSIFY}),
     AgentState.CLASSIFY: frozenset({AgentState.PLAN}),
-    AgentState.PLAN: frozenset({AgentState.RETRIEVE}),
+    AgentState.PLAN: frozenset({AgentState.INVESTIGATE, AgentState.RETRIEVE}),
+    AgentState.INVESTIGATE: frozenset({AgentState.RERANK}),
     AgentState.RETRIEVE: frozenset({AgentState.RERANK}),
     AgentState.RERANK: frozenset({AgentState.ANALYZE}),
     AgentState.ANALYZE: frozenset({AgentState.VERIFY}),

@@ -1,8 +1,15 @@
 """AgentRunner: drives one agent_runs row through the bounded state machine
 (ATLASAI_MASTER_SPEC.md §4):
 
-    RECEIVED -> CLASSIFY -> PLAN -> RETRIEVE -> RERANK -> ANALYZE
+    RECEIVED -> CLASSIFY -> PLAN -> INVESTIGATE -> RERANK -> ANALYZE
     -> VERIFY -> FINDING -> ACTION_DECISION -> COMPLETE
+
+INVESTIGATE is the tool-calling loop: the model picks which allowlisted
+read tools to call. Setting `agent_runs.model_policy.retrieval_mode` to
+"deterministic" swaps it for RETRIEVE (one fixed hybrid search per planned
+subquery, no model in the loop) — useful for cost-sensitive or replayable
+runs, and the mode the evaluation harness uses when measuring retrieval in
+isolation.
 
 Bounded by RunLimits (max 12 steps, max 3 calls/tool, a hard run timeout,
 a token budget) — any state can fail into FAILED, which is always audited
@@ -28,6 +35,7 @@ from ai_atlas.agent_runner.step_executors import (
     analyze,
     classify,
     finding,
+    investigate,
     plan,
     propose_action,
     rerank,
@@ -37,6 +45,7 @@ from ai_atlas.agent_runner.step_executors import (
 from atlasai_db.models.agent import AgentRun
 from atlasai_db.repositories.agent import AgentRunRepository
 from atlasai_db.repositories.audit import AuditEventRepository
+from atlasai_domain.agent.contracts import RetrieveOutput
 from atlasai_domain.agent.limits import RunLimits
 from atlasai_domain.enums import AuditEventType
 
@@ -125,7 +134,14 @@ class AgentRunner:
         plan_output = await plan.run(ctx, question=question)
 
         check_budget()
-        retrieve_outputs = await retrieve.run(ctx, plan=plan_output)
+        if self._retrieval_mode(ctx.agent_run.model_policy) == "deterministic":
+            retrieve_outputs = await retrieve.run(ctx, plan=plan_output)
+        else:
+            candidates = await investigate.run(ctx, question=question, plan=plan_output)
+            # RERANK consumes RetrieveOutput regardless of which path produced
+            # the candidates, so the agentic result is adapted rather than
+            # duplicating the ranking logic for a second shape.
+            retrieve_outputs = [RetrieveOutput(subquery=question, candidates=candidates)]
 
         check_budget()
         rerank_output = await rerank.run(ctx, question=question, retrieve_outputs=retrieve_outputs)
@@ -164,6 +180,14 @@ class AgentRunner:
         await ctx.recorder.record(
             state_name="COMPLETE", status="SUCCEEDED", started_at=datetime.now(UTC), summary="run complete"
         )
+
+    @staticmethod
+    def _retrieval_mode(model_policy: dict[str, Any]) -> str:
+        """"agentic" (the default) runs the INVESTIGATE tool loop;
+        "deterministic" runs RETRIEVE instead. Anything unrecognised falls
+        back to the default rather than failing the run over a typo."""
+        mode = model_policy.get("retrieval_mode")
+        return "deterministic" if mode == "deterministic" else "agentic"
 
     @staticmethod
     def _resolve_limits(*, base: RunLimits, model_policy: dict[str, Any]) -> RunLimits:

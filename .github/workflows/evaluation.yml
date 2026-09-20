@@ -1,0 +1,130 @@
+name: Evaluation
+
+# The grounding evaluation calls a real model, so it is deliberately kept
+# out of the per-push CI workflow: it costs money per run and its failures
+# are statistical rather than binary. It runs weekly and on demand instead,
+# and publishes the metric table as a job summary so regressions in
+# citation coverage or injection resistance are visible over time.
+#
+# It needs a live stack (Postgres/pgvector, Redis, MinIO, the embedder) plus
+# an ANTHROPIC_API_KEY repository secret. Without that secret the job exits
+# early and says so, rather than failing noisily on every scheduled run in
+# a fork.
+
+on:
+  schedule:
+    # Mondays at 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      categories:
+        description: "Comma-separated categories to run (blank = all nine)"
+        required: false
+        default: ""
+
+jobs:
+  evaluate:
+    name: Grounding evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: atlasai
+          POSTGRES_PASSWORD: atlasai
+          POSTGRES_DB: atlasai_eval
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U atlasai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    # Names match the pydantic-settings models (see ci.yml for the same note).
+    env:
+      DATABASE_URL: postgresql+asyncpg://atlasai:atlasai@localhost:5432/atlasai_eval
+      DATABASE_URL_SYNC: postgresql+psycopg://atlasai:atlasai@localhost:5432/atlasai_eval
+      REDIS_URL: redis://localhost:6379/0
+      OBJECT_STORE_ENDPOINT_URL: http://localhost:9000
+      OBJECT_STORE_REGION: us-east-1
+      OBJECT_STORE_ACCESS_KEY: minioadmin
+      OBJECT_STORE_SECRET_KEY: minioadmin
+      OBJECT_STORE_BUCKET_RAW: atlasai-raw
+      OBJECT_STORE_BUCKET_EXTRACTED: atlasai-extracted
+      OBJECT_STORE_USE_SSL: "false"
+      EMBEDDER_BASE_URL: http://localhost:8090
+      EMBEDDING_MODEL_NAME: BAAI/bge-base-en-v1.5
+      EMBEDDING_DIMENSION: "768"
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ATLASAI_SECRET_KEY: eval-only-not-a-real-secret
+      JWT_SIGNING_KEY: eval-only-not-a-real-secret
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_TTL_MINUTES: "15"
+      JWT_REFRESH_TOKEN_TTL_DAYS: "30"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for an API key
+        id: guard
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY}" ]; then
+            echo "No ANTHROPIC_API_KEY secret is configured; skipping the evaluation." >> "$GITHUB_STEP_SUMMARY"
+            echo "have_key=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_key=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install uv
+        if: steps.guard.outputs.have_key == 'true'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        if: steps.guard.outputs.have_key == 'true'
+        run: uv python install 3.12
+
+      - name: Sync workspace (with embedder)
+        if: steps.guard.outputs.have_key == 'true'
+        # The evaluation needs real embeddings, so unlike CI this install
+        # does pull the embedder extra.
+        run: uv sync --all-packages --extra embedder
+
+      - name: Apply migrations
+        if: steps.guard.outputs.have_key == 'true'
+        run: uv run alembic -c alembic.ini upgrade head
+
+      - name: Start the embedder
+        if: steps.guard.outputs.have_key == 'true'
+        run: |
+          uv run uvicorn ai_atlas.embedder_service.main:app --port 8090 &
+          for _ in $(seq 1 60); do
+            curl -sf http://localhost:8090/healthz && break
+            sleep 5
+          done
+
+      - name: Run the evaluation harness
+        if: steps.guard.outputs.have_key == 'true'
+        run: uv run python -m atlasai_evaluation.cli --categories "${{ inputs.categories }}" --output eval-report.json
+
+      - name: Publish the metric table
+        if: steps.guard.outputs.have_key == 'true'
+        run: uv run python -m atlasai_evaluation.cli --summarize eval-report.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the full report
+        if: steps.guard.outputs.have_key == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-report
+          path: eval-report.json

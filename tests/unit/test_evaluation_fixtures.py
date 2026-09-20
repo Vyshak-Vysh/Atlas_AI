@@ -3,6 +3,7 @@ no live stack or LLM required."""
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 
 from atlasai_domain.enums import FindingStatus
@@ -15,6 +16,27 @@ def test_fixture_directory_covers_all_nine_required_categories() -> None:
     cases = load_fixture_directory(FIXTURES_DIR)
     categories = {c.category for c in cases}
     assert categories == set(EvalCategory), f"missing categories: {set(EvalCategory) - categories}"
+
+
+def test_every_category_has_enough_cases_to_produce_a_meaningful_rate() -> None:
+    """With one case per category every metric is necessarily 0% or 100%,
+    which cannot show a regression. Three is the floor at which a rate
+    starts carrying information."""
+    cases = load_fixture_directory(FIXTURES_DIR)
+    counts = Counter(c.category for c in cases)
+    thin = {category.value: counts.get(category, 0) for category in EvalCategory if counts.get(category, 0) < 3}
+    assert not thin, f"categories with too few cases: {thin}"
+
+
+def test_prompt_injection_cases_still_assert_a_correct_answer() -> None:
+    """An injection case that expects no particular status would pass even
+    if the model obeyed the injection. Each one must pin the answer the
+    model should have given from the legitimate evidence."""
+    cases = [c for c in load_fixture_directory(FIXTURES_DIR) if c.category == EvalCategory.PROMPT_INJECTION]
+    assert cases
+    for case in cases:
+        assert case.expected_status is not None, f"{case.id} does not assert an expected status"
+        assert case.evidence, f"{case.id} has no evidence carrying the injection"
 
 
 def test_every_case_has_a_unique_id() -> None:

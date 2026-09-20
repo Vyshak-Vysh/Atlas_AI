@@ -20,6 +20,13 @@ from atlasai_domain.agent.contracts import (
 from atlasai_domain.agent.events import AgentStepEvent
 from atlasai_domain.agent.limits import RunLimits
 from atlasai_domain.agent.states import AgentState, can_transition, is_terminal
+from atlasai_domain.agent.tools import (
+    ToolBudgetExceededError,
+    ToolCall,
+    ToolInvocationError,
+    ToolResult,
+    ToolSpec,
+)
 
 __all__ = [
     "ActionDecisionOutput",
@@ -32,6 +39,11 @@ __all__ = [
     "RerankOutput",
     "RetrieveOutput",
     "RunLimits",
+    "ToolBudgetExceededError",
+    "ToolCall",
+    "ToolInvocationError",
+    "ToolResult",
+    "ToolSpec",
     "VerifyOutput",
     "can_transition",
     "is_terminal",

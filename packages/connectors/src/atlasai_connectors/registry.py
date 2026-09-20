@@ -8,19 +8,25 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from atlasai_connectors.git_ci.connector import GitHubConnector
 from atlasai_connectors.manual_upload.connector import ManualUploadConnector
 from atlasai_connectors.protocol import Connector
 from atlasai_domain.enums import ConnectorProvider
 
 _REGISTRY: dict[ConnectorProvider, Callable[[], Connector]] = {
     ConnectorProvider.MANUAL_UPLOAD: ManualUploadConnector,
+    ConnectorProvider.GIT_CI_GITHUB: GitHubConnector,
 }
 
-# Populated as each Release-4 connector lands (git_ci, gmail, msgraph,
-# google_drive, meetings, pm_jira) — each entry gated behind its own
-# `is_configured()` classmethod checking that provider's env vars.
+# Each entry is gated behind that provider's own `is_configured()` check, so
+# a provider whose credentials are absent is never offered as available.
+# gmail, msgraph, google_drive, meetings and pm_jira are declared in
+# ConnectorProvider and rendered in the UI, but have no adapter yet and so
+# deliberately appear in neither map — `list_available_providers()` omits
+# them and `get_connector()` raises KeyError rather than pretending.
 _CONFIGURATION_CHECKS: dict[ConnectorProvider, Callable[[], bool]] = {
     ConnectorProvider.MANUAL_UPLOAD: lambda: True,
+    ConnectorProvider.GIT_CI_GITHUB: GitHubConnector.is_configured,
 }
 
 

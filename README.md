@@ -1,6 +1,6 @@
 # AtlasAI
 
-**AtlasAI** is an evidence-backed enterprise project intelligence platform. It connects to a project's authorized sources — documents, and (inert until credentials are configured) email, meetings, and PM tools — retrieves permission-filtered evidence, and answers scope and delivery questions with a structured, cited finding.
+**AtlasAI** is an evidence-backed enterprise project intelligence platform. It ingests a project's authorized sources — documents today, with email, meetings, and PM tools defined by the same connector protocol and planned next — retrieves permission-filtered evidence, and answers scope and delivery questions with a structured, cited finding.
 
 The core design rule: **the LLM is never the system of record.** Every material claim in an answer links back to immutable source evidence. If the evidence isn't there, the system returns `NOT_VERIFIED` instead of guessing, and any action that writes back to an external system requires a human to approve it first.
 
@@ -58,7 +58,7 @@ Source systems
 Every agent run moves through an explicit, bounded state machine — it cannot loop forever, call unregistered tools, or execute arbitrary code:
 
 ```
-RECEIVED → CLASSIFY → PLAN → RETRIEVE → RERANK → ANALYZE → VERIFY → FINDING → ACTION_DECISION → COMPLETE
+RECEIVED → CLASSIFY → PLAN → INVESTIGATE → RERANK → ANALYZE → VERIFY → FINDING → ACTION_DECISION → COMPLETE
 ```
 
 For requests that need to draft an external response, an approval branch is inserted before anything is sent:
@@ -67,7 +67,18 @@ For requests that need to draft an external response, an approval branch is inse
 ACTION_DECISION → PROPOSE_ACTION → WAIT_APPROVAL → EXECUTE → COMPLETE
 ```
 
-Hard limits enforced on every run: max 12 steps, max 3 calls per tool, a run-level and per-tool timeout, a token budget, and an allowlist of tools — no arbitrary SQL, shell, URL, or code execution.
+**INVESTIGATE is a real tool-calling loop.** The model is handed a closed registry of read-only tools and decides for itself which to call and with what arguments — searching once for an original commitment, again for a later amendment, and checking the tracked requirement list, without any of those being hardcoded. The available tools are:
+
+| Tool | Purpose |
+|---|---|
+| `search_evidence` | Hybrid keyword + semantic search over the project's evidence |
+| `list_project_sources` | What documents exist at all, so "no search hit" is not mistaken for "no evidence" |
+| `list_requirements` | The project's tracked requirements and their scope/delivery status |
+| `get_requirement_detail` | One requirement with its acceptance criteria |
+
+Hard limits enforced on every run: max 12 steps, max 3 calls per tool, a run-level and per-tool timeout, a token budget, and an allowlist of tools — no arbitrary SQL, shell, URL, or code execution. The allowlist and the per-tool budget are enforced at dispatch in `ToolExecutionContext.execute`, not merely described in the prompt, and every tool is scoped to the run's tenant and project server-side — no tool accepts a tenant or project argument from the model, so a poisoned prompt cannot reach another tenant's data.
+
+The loop's prose is never the answer. Its only durable output is the set of authoritative `EvidenceCandidate` rows it gathered, which RERANK orders and ANALYZE turns into a structured, citation-validated finding. Setting `agent_runs.model_policy.retrieval_mode` to `"deterministic"` swaps the loop for RETRIEVE — one fixed hybrid search per planned subquery, no model in the loop — which is the cheaper, replayable path.
 
 ## Tech stack
 
@@ -97,18 +108,20 @@ apps/
                 bounded agent state machine) and the embedding microservice
   web/          Next.js 14 + TypeScript frontend
 packages/
-  domain/       Pure Pydantic contracts, enums, and the agent state machine
-                definition — no DB/HTTP dependency
+  domain/       Pure Pydantic contracts, enums, tool-call contracts, and
+                the agent state machine definition — no DB/HTTP dependency
   db/           SQLAlchemy 2.x models, the tenant/project-scoped repository
                 layer, object storage and Redis clients
   retrieval/    Hybrid (full-text + pgvector) search, reranking, the
                 embedder HTTP client
-  connectors/   The Connector protocol; manual-upload (parsers, MIME
-                validation, malware scanning) and Git/CI are fully live;
-                Gmail/MS Graph/Drive/Meetings/PM are real, complete
-                adapters, inert until their OAuth credentials are set
-  llm_gateway/  Anthropic adapter, structured-output validation,
-                untrusted-evidence prompt framing, cost tracking
+  connectors/   The Connector protocol and provider registry. Manual
+                upload is implemented end to end (parsers, MIME validation,
+                malware scanning, chunking). Gmail/MS Graph/Drive/Meetings/
+                Jira/Git-CI are defined in the provider enum and surfaced in
+                the UI as unavailable; their adapters are not yet written
+  llm_gateway/  Anthropic adapter, structured-output validation, the
+                bounded tool-use loop, untrusted-evidence prompt framing,
+                cost tracking
   evaluation/   Fixture-driven evaluation harness (9 required categories)
   security/     RBAC, credential-ref encryption, payload hashing, redaction
 infra/migrations/  Alembic migrations (schema authority: docs/ERD_FINAL.md)
@@ -178,20 +191,39 @@ All configuration is documented with inline comments in [`.env.example`](.env.ex
 - **Anthropic** — API key and which Claude model tier handles classification, default reasoning, and escalation
 - **Auth/JWT** — token TTLs and signing key
 - **Agent run limits** — step/tool/timeout/token budgets
-- **Connectors** — GitHub (fully live), Gmail/MS Graph/Google Drive/Meetings/Jira (real adapters, inert until OAuth credentials are set)
+- **Connectors** — manual upload needs no configuration and is the only implemented provider. The GitHub/Gmail/MS Graph/Google Drive/Meetings/Jira variables are placeholders for adapters that are not yet written; setting them does not enable a connector
 
 ## Running tests and checks
 
 ```bash
 uv run ruff check packages apps tests                 # lint
-uv run mypy packages/domain/src packages/security/src packages/db/src \
-  packages/retrieval/src packages/connectors/src packages/llm_gateway/src \
-  packages/evaluation/src apps/api/src apps/ai_atlas/src               # type check (strict)
+uv run mypy packages/domain/src packages/security/src packages/db/src   packages/retrieval/src packages/connectors/src packages/llm_gateway/src   packages/evaluation/src apps/api/src apps/ai_atlas/src               # type check (strict)
 uv run pytest tests/unit                               # unit tests only, no external services needed
 uv run pytest tests/unit tests/integration             # needs Postgres/Redis/MinIO/ClamAV running
+
+cd apps/web && npm run typecheck && npm run test:run   # frontend types + unit tests
 ```
 
-[`tests/evaluation/fixtures/`](tests/evaluation/fixtures/) holds the required evaluation categories (in-scope, out-of-scope, conflicting, ambiguous, not-verified, superseded, partially-delivered, prompt-injection, permission-boundary). Running them via `atlasai_evaluation.EvalHarness` exercises the real HTTP API end to end and needs a working `ANTHROPIC_API_KEY`.
+All of the above run in CI on every push and pull request
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)), with Postgres/pgvector,
+Redis and MinIO brought up as services for the integration job. No job in that
+workflow has an API key, by design — anything needing a live model belongs in
+the evaluation workflow instead.
+
+### Grounding evaluation
+
+[`tests/evaluation/fixtures/`](tests/evaluation/fixtures/) holds **37 cases across the nine required categories** — in-scope, out-of-scope, conflicting, ambiguous, not-verified, superseded, partially-delivered, prompt-injection, and permission-boundary — with four or five cases each, so the metrics are computed over a sample large enough to show a regression rather than flipping between 0% and 100%.
+
+```bash
+# Runs every fixture through the real POST /api/v1/agent/runs path.
+# Costs real money: one model call per case.
+uv run python -m atlasai_evaluation.cli --base-url http://localhost:8000 --output eval-report.json
+
+# Re-render an existing report as a metric table. Free, no network.
+uv run python -m atlasai_evaluation.cli --summarize eval-report.json
+```
+
+The harness exercises the real HTTP API end to end and needs a working `ANTHROPIC_API_KEY`. It scores retrieval recall@k, citation coverage, unsupported-assertion rate, conflict-detection precision, prompt-injection resistance and permission-boundary enforcement, and exits non-zero when any falls below its threshold — 100% for injection resistance and permission boundaries, 95% for citation coverage, 5% maximum for unsupported assertions. It runs weekly in [`.github/workflows/evaluation.yml`](.github/workflows/evaluation.yml) and publishes the metric table as a job summary.
 
 ## What's built vs. what's flagged as follow-on
 
@@ -201,12 +233,15 @@ uv run pytest tests/unit tests/integration             # needs Postgres/Redis/Mi
 - Audit logging
 - Manual document upload: MIME validation, ClamAV scanning, PDF/DOCX/XLSX/text/image-OCR parsing, chunking, local embeddings, hybrid retrieval, deterministic reranking
 - The bounded agent state machine running asynchronously via Celery with realtime SSE progress streaming
+- **The INVESTIGATE tool-calling loop** — a four-tool read-only registry with the allowlist and per-tool call budget enforced at dispatch, each tool call checkpointed as its own `agent_steps` row. The loop's protocol behaviour (result batching, iteration bounds, refusal handling, budget exhaustion) is unit-tested against a scripted provider, so it is covered in CI without an API key
+- **The GitHub connector** — issues and pull requests as evidence, with incremental cursor-based sync, tested against a mocked transport
 - The approval workflow: payload-hash binding, expiry, idempotent execution
 - Source deletion with tombstone propagation
 - The Next.js frontend covering this whole flow
+- CI running lint, strict types, unit tests, integration tests against real services, and the frontend type-check/test/build on every push
 
 **Explicitly deferred** (per the plan agreed before this build started):
-- **Gmail / MS Graph / Drive / Meetings / PM connectors** — real, complete adapter code against the `Connector` protocol, but inert until their OAuth apps are registered and credentials are set in `.env`. Git/CI (GitHub) and manual upload are the two fully live connectors today.
+- **Gmail / MS Graph / Drive / Meetings / Jira connectors** — **not implemented.** The `Connector` protocol, the provider enum, the registry's `is_configured()` gate and the connector UI all exist and are exercised by the manual-upload and GitHub providers, so adding one is a contained piece of work — but no adapter code exists for these five, and `GET /api/v1/connectors` correctly reports them as unavailable. Manual upload and GitHub are the implemented providers today.
 - **Requirements/decisions/delivery-record timelines** — full data model and repository layer exist, but there's no dedicated API/UI yet; the agent's timeline/scope-comparison/conflict-analysis tools aren't wired into the tool registry yet.
 - **Full observability** (OpenTelemetry dashboards) and **production hardening** (managed backups, load testing, external red-team engagement) are out of scope for this pass — structured audit logging, retention/tombstoning, and the prompt-injection/permission-boundary evaluation fixtures are in place as the practical subset.
 - The agent's **ACTION_DECISION** step currently only routes into the action/approval branch for the `DRAFT_RESPONSE` intent — broader autonomous write-intent detection is future work.

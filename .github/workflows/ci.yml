@@ -1,0 +1,202 @@
+name: CI
+
+# Every gate the README tells a contributor to run locally runs here too, so
+# "it passes on my machine" and "it passes in CI" cannot drift apart.
+#
+# The suite is split by what each job needs:
+#   - `quality` and `unit` need nothing but Python; they run on every push.
+#   - `integration` needs Postgres/pgvector, Redis and MinIO, so it brings
+#     them up as services rather than mocking them.
+#   - `web` type-checks and builds the frontend.
+# The evaluation harness is deliberately NOT run here: it calls a real model
+# and costs money per run, so it is a scheduled/manual workflow instead
+# (see evaluation.yml).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A newer push to the same ref supersedes an in-flight run.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  quality:
+    name: Lint and type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Sync workspace
+        # The embedder extra pulls torch and is not needed to lint or type
+        # check; skipping it keeps this job to a fraction of the install.
+        run: uv sync --all-packages
+
+      - name: Ruff
+        run: uv run ruff check packages apps tests
+
+      # NOTE: `ruff format --check` is intentionally not a gate yet. The
+      # codebase predates the formatter and 35 files would need reformatting;
+      # that belongs in its own commit rather than being forced through CI.
+
+      - name: mypy (strict)
+        run: |
+          uv run mypy \
+            packages/domain/src \
+            packages/security/src \
+            packages/db/src \
+            packages/retrieval/src \
+            packages/connectors/src \
+            packages/llm_gateway/src \
+            packages/evaluation/src \
+            apps/api/src \
+            apps/ai_atlas/src
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Sync workspace
+        run: uv sync --all-packages
+
+      - name: Run unit tests
+        # No database, no Redis, no API key — anything in tests/unit that
+        # needs one of those is in the wrong directory.
+        run: uv run pytest tests/unit -q --cov=packages --cov=apps --cov-report=term-missing
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: atlasai
+          POSTGRES_PASSWORD: atlasai
+          POSTGRES_DB: atlasai_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U atlasai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports: ["9000:9000"]
+
+    # These names must match what the pydantic-settings models actually
+    # read (packages/db/src/atlasai_db/settings.py and friends) — the app
+    # takes full DSNs, not a host/port/user triple.
+    env:
+      DATABASE_URL: postgresql+asyncpg://atlasai:atlasai@localhost:5432/atlasai_test
+      DATABASE_URL_SYNC: postgresql+psycopg://atlasai:atlasai@localhost:5432/atlasai_test
+      REDIS_URL: redis://localhost:6379/0
+      OBJECT_STORE_ENDPOINT_URL: http://localhost:9000
+      OBJECT_STORE_REGION: us-east-1
+      OBJECT_STORE_ACCESS_KEY: minioadmin
+      OBJECT_STORE_SECRET_KEY: minioadmin
+      OBJECT_STORE_BUCKET_RAW: atlasai-raw
+      OBJECT_STORE_BUCKET_EXTRACTED: atlasai-extracted
+      OBJECT_STORE_USE_SSL: "false"
+      EMBEDDER_BASE_URL: http://localhost:8090
+      EMBEDDING_MODEL_NAME: BAAI/bge-base-en-v1.5
+      EMBEDDING_DIMENSION: "768"
+      CLAMAV_HOST: localhost
+      CLAMAV_PORT: "3310"
+      # Never a real key in CI. Integration tests must not reach a model;
+      # anything that needs one belongs in the evaluation workflow.
+      ANTHROPIC_API_KEY: test-key-not-used
+      ATLASAI_SECRET_KEY: ci-only-not-a-real-secret
+      JWT_SIGNING_KEY: ci-only-not-a-real-secret
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_TTL_MINUTES: "15"
+      JWT_REFRESH_TOKEN_TTL_DAYS: "30"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Sync workspace
+        run: uv sync --all-packages
+
+      - name: Apply migrations
+        # Schema is created only by Alembic — nothing is auto-created at
+        # app startup, so a migration that does not apply fails CI here.
+        run: uv run alembic -c alembic.ini upgrade head
+
+      - name: Run integration tests
+        run: uv run pytest tests/integration -q
+
+  web:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:run
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+        run: npm run build
