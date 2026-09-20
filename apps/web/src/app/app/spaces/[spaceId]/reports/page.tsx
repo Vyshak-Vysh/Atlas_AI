@@ -60,7 +60,7 @@ export default function SpaceReportPage() {
             </div>
             {report.total_findings === 0 ? (
               <div className="uncertainty-callout" style={{ marginTop: "var(--space-4)" }}>
-                No findings have been recorded yet across this client's projects.
+                No findings have been recorded yet across this client&apos;s projects.
               </div>
             ) : conflictCount === 0 ? (
               <div className="success-callout" style={{ marginTop: "var(--space-4)" }}>
@@ -68,7 +68,7 @@ export default function SpaceReportPage() {
               </div>
             ) : (
               <div className="conflict-callout" style={{ marginTop: "var(--space-4)" }}>
-                {conflictCount} finding{conflictCount === 1 ? "" : "s"} show conflicting evidence somewhere in this client's projects and need review.
+                {conflictCount} finding{conflictCount === 1 ? "" : "s"} show conflicting evidence somewhere in this client&apos;s projects and need review.
               </div>
             )}
           </CardBody>

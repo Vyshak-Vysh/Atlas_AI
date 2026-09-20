@@ -55,7 +55,7 @@ export default function SpaceEvidencePage() {
         ) : (
           <>
             <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-4)" }}>
-              Or jump straight into a project's evidence:
+              Or jump straight into a project&apos;s evidence:
             </p>
             <div style={{ display: "grid", gap: "var(--space-2)" }}>
               {projects.map((p) => (

@@ -6,10 +6,16 @@ name: Evaluation
 # and publishes the metric table as a job summary so regressions in
 # citation coverage or injection resistance are visible over time.
 #
-# It needs a live stack (Postgres/pgvector, Redis, MinIO, the embedder) plus
-# an ANTHROPIC_API_KEY repository secret. Without that secret the job exits
-# early and says so, rather than failing noisily on every scheduled run in
-# a fork.
+# Unlike CI, this needs the WHOLE stack, not a couple of service
+# containers: each fixture is uploaded through the real upload endpoint
+# (object storage + malware scan + parse + chunk + embed via Celery) and
+# then asked through the real agent-run endpoint. Hand-assembling that from
+# `services:` blocks would drift from how the stack actually runs, so this
+# uses the project's own docker-compose file — the same command the README
+# gives for local development.
+#
+# It needs an ANTHROPIC_API_KEY repository secret. Without it the job exits
+# early and says so, rather than failing noisily on every scheduled run.
 
 on:
   schedule:
@@ -26,57 +32,15 @@ jobs:
   evaluate:
     name: Grounding evaluation
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: atlasai
-          POSTGRES_PASSWORD: atlasai
-          POSTGRES_DB: atlasai_eval
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U atlasai"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-      redis:
-        image: redis:7-alpine
-        ports: ["6379:6379"]
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
-    # Names match the pydantic-settings models (see ci.yml for the same note).
-    env:
-      DATABASE_URL: postgresql+asyncpg://atlasai:atlasai@localhost:5432/atlasai_eval
-      DATABASE_URL_SYNC: postgresql+psycopg://atlasai:atlasai@localhost:5432/atlasai_eval
-      REDIS_URL: redis://localhost:6379/0
-      OBJECT_STORE_ENDPOINT_URL: http://localhost:9000
-      OBJECT_STORE_REGION: us-east-1
-      OBJECT_STORE_ACCESS_KEY: minioadmin
-      OBJECT_STORE_SECRET_KEY: minioadmin
-      OBJECT_STORE_BUCKET_RAW: atlasai-raw
-      OBJECT_STORE_BUCKET_EXTRACTED: atlasai-extracted
-      OBJECT_STORE_USE_SSL: "false"
-      EMBEDDER_BASE_URL: http://localhost:8090
-      EMBEDDING_MODEL_NAME: BAAI/bge-base-en-v1.5
-      EMBEDDING_DIMENSION: "768"
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      ATLASAI_SECRET_KEY: eval-only-not-a-real-secret
-      JWT_SIGNING_KEY: eval-only-not-a-real-secret
-      JWT_ALGORITHM: HS256
-      JWT_ACCESS_TOKEN_TTL_MINUTES: "15"
-      JWT_REFRESH_TOKEN_TTL_DAYS: "30"
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Check for an API key
         id: guard
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           if [ -z "${ANTHROPIC_API_KEY}" ]; then
             echo "No ANTHROPIC_API_KEY secret is configured; skipping the evaluation." >> "$GITHUB_STEP_SUMMARY"
@@ -84,6 +48,39 @@ jobs:
           else
             echo "have_key=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Write .env for the stack
+        if: steps.guard.outputs.have_key == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # docker-compose reads .env. Start from the committed example so
+          # any new variable added there is picked up automatically, then
+          # override only what CI needs.
+          cp .env.example .env
+          {
+            echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
+            echo "ATLASAI_SECRET_KEY=eval-only-not-a-real-secret"
+            echo "JWT_SIGNING_KEY=eval-only-not-a-real-secret"
+          } >> .env
+
+      - name: Start the stack
+        if: steps.guard.outputs.have_key == 'true'
+        run: |
+          docker compose up -d
+          echo "Waiting for the API to answer readiness..."
+          # First boot downloads the ClamAV signature database and the
+          # embedding model, so this legitimately takes several minutes.
+          for _ in $(seq 1 90); do
+            if curl -sf http://localhost:8000/readyz >/dev/null; then
+              echo "API is ready"; exit 0
+            fi
+            sleep 10
+          done
+          echo "API never became ready:"
+          docker compose ps
+          docker compose logs --tail 100 api embedder clamav
+          exit 1
 
       - name: Install uv
         if: steps.guard.outputs.have_key == 'true'
@@ -95,36 +92,46 @@ jobs:
         if: steps.guard.outputs.have_key == 'true'
         run: uv python install 3.12
 
-      - name: Sync workspace (with embedder)
+      - name: Sync workspace
         if: steps.guard.outputs.have_key == 'true'
-        # The evaluation needs real embeddings, so unlike CI this install
-        # does pull the embedder extra.
-        run: uv sync --all-packages --extra embedder
+        # The harness is a plain HTTP client against the running stack, so
+        # it does not need the embedder extra — that model runs in Docker.
+        run: uv sync --all-packages
 
       - name: Apply migrations
         if: steps.guard.outputs.have_key == 'true'
-        run: uv run alembic -c alembic.ini upgrade head
-
-      - name: Start the embedder
-        if: steps.guard.outputs.have_key == 'true'
+        # Source the same .env the stack was started from rather than
+        # restating the DSN here — a hardcoded copy silently drifts from
+        # whatever credentials compose actually brought Postgres up with.
         run: |
-          uv run uvicorn ai_atlas.embedder_service.main:app --port 8090 &
-          for _ in $(seq 1 60); do
-            curl -sf http://localhost:8090/healthz && break
-            sleep 5
-          done
+          set -a && . ./.env && set +a
+          uv run alembic -c alembic.ini upgrade head
 
       - name: Run the evaluation harness
         if: steps.guard.outputs.have_key == 'true'
-        run: uv run python -m atlasai_evaluation.cli --categories "${{ inputs.categories }}" --output eval-report.json
+        run: |
+          uv run python -m atlasai_evaluation.cli \
+            --base-url http://localhost:8000 \
+            --categories "${{ inputs.categories }}" \
+            --output eval-report.json
 
       - name: Publish the metric table
-        if: steps.guard.outputs.have_key == 'true'
+        # Runs even when the harness exited non-zero on a threshold breach,
+        # because that is exactly when the numbers are worth reading.
+        if: always() && steps.guard.outputs.have_key == 'true' && hashFiles('eval-report.json') != ''
         run: uv run python -m atlasai_evaluation.cli --summarize eval-report.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the full report
-        if: steps.guard.outputs.have_key == 'true'
+        if: always() && steps.guard.outputs.have_key == 'true' && hashFiles('eval-report.json') != ''
         uses: actions/upload-artifact@v4
         with:
           name: evaluation-report
           path: eval-report.json
+
+      - name: Stack logs on failure
+        if: failure() && steps.guard.outputs.have_key == 'true'
+        run: docker compose logs --tail 200
+
+      - name: Tear down
+        if: always() && steps.guard.outputs.have_key == 'true'
+        run: docker compose down -v

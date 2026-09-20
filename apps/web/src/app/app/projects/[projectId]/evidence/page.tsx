@@ -60,7 +60,7 @@ export default function EvidenceExplorerPage() {
                   key={candidate.evidence_chunk_id}
                   type="button"
                   className="evidence-item"
-                  aria-selected={selected?.kind === "evidence" && selected.item.evidence_chunk_id === candidate.evidence_chunk_id}
+                  aria-pressed={selected?.kind === "evidence" && selected.item.evidence_chunk_id === candidate.evidence_chunk_id}
                   onClick={() => setSelected({ kind: "evidence", item: candidate })}
                   style={{ textAlign: "left", width: "100%" }}
                 >
@@ -93,7 +93,7 @@ export default function EvidenceExplorerPage() {
               <div
                 key={source.id}
                 className="evidence-item"
-                aria-selected={selected?.kind === "source" && selected.item.id === source.id}
+                aria-pressed={selected?.kind === "source" && selected.item.id === source.id}
                 onClick={() => setSelected({ kind: "source", item: source })}
               >
                 <div className="evidence-item__meta">

@@ -1051,7 +1051,7 @@ a.metric-card:hover {
   background: var(--surface-subtle);
 }
 
-.evidence-item[aria-selected="true"] {
+.evidence-item[aria-pressed="true"] {
   border-color: var(--color-brand-600);
   box-shadow: inset 3px 0 0 var(--color-brand-600);
 }

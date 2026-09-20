@@ -21,7 +21,7 @@ export default function RolesSettingsPage() {
       <CardBody>
         <p style={{ margin: "0 0 var(--space-4)", fontSize: "var(--font-size-sm)", color: "var(--text-secondary)" }}>
           Roles are fixed for this deployment — the same six roles apply to both workspace and project membership.
-          Assign roles from Team or a project's Settings tab.
+          Assign roles from Team or a project&apos;s Settings tab.
         </p>
         <div className="table-wrapper">
           <table className="data-table">

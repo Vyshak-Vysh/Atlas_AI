@@ -50,7 +50,7 @@ export default function ReportPage() {
             </div>
             {report.total_findings === 0 ? (
               <div className="uncertainty-callout" style={{ marginTop: "var(--space-4)" }}>
-                No findings have been recorded yet — this project's scope hasn&rsquo;t been investigated, so there is
+                No findings have been recorded yet — this project&apos;s scope hasn&rsquo;t been investigated, so there is
                 nothing to confirm as conflict-free.
               </div>
             ) : conflictCount === 0 ? (
@@ -61,7 +61,7 @@ export default function ReportPage() {
             ) : (
               <div className="conflict-callout" style={{ marginTop: "var(--space-4)" }}>
                 {conflictCount} finding{conflictCount === 1 ? "" : "s"} currently show conflicting evidence and need
-                review before this project's status can be considered settled.
+                review before this project&apos;s status can be considered settled.
               </div>
             )}
           </CardBody>
@@ -160,7 +160,7 @@ export default function ReportPage() {
                 <li>Evidence is connected but no investigation has run yet — ask a scope question to generate findings.</li>
               )}
               {report.pending_approvals === 0 && conflictCount === 0 && report.total_findings > 0 && (
-                <li>No outstanding actions — this project's evidence and findings are current.</li>
+                <li>No outstanding actions — this project&apos;s evidence and findings are current.</li>
               )}
             </ul>
           </CardBody>

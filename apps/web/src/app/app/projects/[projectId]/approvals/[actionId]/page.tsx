@@ -88,7 +88,7 @@ export default function ApprovalDetailPage() {
         {payload.draft_body && (
           <div style={{ marginTop: "var(--space-5)" }}>
             <p style={{ margin: 0, fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-semibold)", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-              <Lock size={12} aria-hidden /> Draft response (immutable — payload is hash-locked to what you're approving)
+              <Lock size={12} aria-hidden /> Draft response (immutable — payload is hash-locked to what you&apos;re approving)
             </p>
             <div className="card" style={{ marginTop: "var(--space-2)", padding: "var(--space-4)", background: "var(--surface-subtle)" }}>
               <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{payload.draft_body}</p>
