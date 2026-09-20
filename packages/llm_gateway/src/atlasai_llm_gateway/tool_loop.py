@@ -114,6 +114,7 @@ class ToolLoopGateway:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
     ) -> Any:
+        self._settings.require_api_key()
         return await self._client.messages.create(
             model=model,
             max_tokens=max_tokens,

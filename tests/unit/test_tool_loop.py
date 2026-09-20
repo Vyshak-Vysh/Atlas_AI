@@ -19,7 +19,7 @@ import pytest
 from anthropic import AsyncAnthropic
 
 from atlasai_domain.agent.tools import ToolCall, ToolResult, ToolSpec
-from atlasai_llm_gateway.settings import AnthropicSettings
+from atlasai_llm_gateway.settings import AnthropicSettings, MissingAPIKeyError
 from atlasai_llm_gateway.tool_loop import ToolLoopGateway, ToolLoopRefusalError
 
 _SPEC = ToolSpec(
@@ -210,3 +210,22 @@ def test_tool_spec_serializes_to_the_provider_shape() -> None:
     payload = _SPEC.to_provider_dict()
     assert set(payload) == {"name", "description", "input_schema"}
     assert payload["input_schema"]["additionalProperties"] is False
+
+
+async def test_missing_api_key_raises_an_actionable_error() -> None:
+    """With no key configured the provider SDK fails with "Could not
+    resolve authentication method", which shows up on an agent run as an
+    opaque FAILED and reads like a pipeline bug. The gateway must name the
+    variable to set instead."""
+    gateway = ToolLoopGateway(
+        settings=AnthropicSettings(anthropic_api_key=""),
+        client=cast(AsyncAnthropic, object()),
+    )
+    with pytest.raises(MissingAPIKeyError) as excinfo:
+        await gateway.run(
+            system="s", user_content="u", tools=[_SPEC], execute=_echo_executor, max_iterations=2
+        )
+
+    message = str(excinfo.value)
+    assert "ANTHROPIC_API_KEY" in message
+    assert ".env" in message

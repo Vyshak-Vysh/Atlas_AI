@@ -205,10 +205,32 @@ cd apps/web && npm run typecheck && npm run test:run   # frontend types + unit t
 ```
 
 All of the above run in CI on every push and pull request
-([`.github/workflows/ci.yml`](.github/workflows/ci.yml)), with Postgres/pgvector,
-Redis and MinIO brought up as services for the integration job. No job in that
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)), with Postgres/pgvector
+and Redis brought up as services for the integration job. No job in that
 workflow has an API key, by design — anything needing a live model belongs in
 the evaluation workflow instead.
+
+### Is the agent actually exercised without a key?
+
+Yes. [`tests/integration/test_agent_pipeline.py`](tests/integration/test_agent_pipeline.py)
+drives a complete agent run against a real database, faking only the two network
+boundaries: the Anthropic HTTP call and the embedder HTTP call. Everything between
+them is the real system — the INVESTIGATE loop really dispatches tools, which
+really run project-scoped hybrid queries against Postgres and pgvector; RERANK
+really scores the rows; ANALYZE really reconciles citations; and FINDING really
+writes `findings` and `finding_citations` rows.
+
+It asserts four things that matter:
+
+| Test | What it proves |
+|---|---|
+| A run produces a real cited finding | The pipeline end to end, with citations resolving to chunks that exist |
+| INVESTIGATE dispatches and checkpoints tools | Each tool call leaves its own auditable `agent_steps` row |
+| A hallucinated citation fails the run | A chunk the model invented is rejected, and **no** finding is persisted |
+| Evidence is scoped to the run's project | A second project's evidence is unreachable, enforced in the query |
+
+What this does **not** cover is the quality of the model's judgement. That is what
+the evaluation harness below is for, and it genuinely needs an API key.
 
 ### Grounding evaluation
 

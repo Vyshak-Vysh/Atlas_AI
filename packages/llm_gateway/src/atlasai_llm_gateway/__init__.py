@@ -5,6 +5,7 @@ from atlasai_llm_gateway.client import AnthropicGateway, LLMRefusalError, Struct
 from atlasai_llm_gateway.cost_tracking import TokenUsage
 from atlasai_llm_gateway.framing import SYSTEM_PROMPT_V1, build_evidence_block
 from atlasai_llm_gateway.grounded_answer import CitationValidationError, generate_grounded_answer
+from atlasai_llm_gateway.settings import MissingAPIKeyError
 from atlasai_llm_gateway.tool_loop import ToolLoopGateway, ToolLoopRefusalError, ToolLoopResult
 
 __all__ = [
@@ -12,6 +13,7 @@ __all__ = [
     "AnthropicGateway",
     "CitationValidationError",
     "LLMRefusalError",
+    "MissingAPIKeyError",
     "StructuredCompletion",
     "StructuredOutputError",
     "TokenUsage",

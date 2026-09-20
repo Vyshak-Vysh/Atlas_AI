@@ -81,6 +81,7 @@ class AnthropicGateway:
         model: str | None = None,
         max_tokens: int | None = None,
     ) -> StructuredCompletion:
+        self._settings.require_api_key()
         response = await self._client.messages.parse(
             model=model or self._settings.llm_model_default,
             max_tokens=max_tokens or self._settings.llm_max_tokens_default,
