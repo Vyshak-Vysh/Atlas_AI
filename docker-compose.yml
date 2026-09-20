@@ -56,7 +56,11 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    # quay.io, not Docker Hub: `docker pull minio/minio` now returns
+    # "pull access denied" on a machine that has not cached it, which
+    # breaks a fresh clone and any CI runner. quay.io is MinIO's own
+    # registry and serves the same image.
+    image: quay.io/minio/minio:latest
     command: server /data --console-address ":9001"
     <<: *common-env
     environment:

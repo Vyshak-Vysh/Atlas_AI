@@ -112,12 +112,18 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-      # MinIO is NOT a service container. The official minio/minio image
-      # needs a command (`server /data`), and service containers cannot
-      # override CMD — that is why an image needing no arguments was used
-      # here originally. Bitnami retired their public `latest` tags, so it
-      # now starts as an explicit `docker run` step below instead, using
-      # the same image docker-compose.yml uses.
+      # No object store here on purpose. Verified by running the suite with
+      # MinIO stopped: all 48 integration tests still pass, because the only
+      # test that posts to the upload endpoint
+      # (test_cross_tenant_document_upload_is_denied) asserts a permission
+      # denial, and the membership check short-circuits before any storage
+      # call. The OBJECT_STORE_* variables below are still set because the
+      # settings models are constructed at import time.
+      #
+      # If a test is ever added that actually stores an object, start MinIO
+      # as a `docker run` step (service containers cannot override CMD, and
+      # minio needs `server /data`) using quay.io/minio/minio — the Docker
+      # Hub mirror now returns "pull access denied" on a clean runner.
 
     # These names must match what the pydantic-settings models actually
     # read (packages/db/src/atlasai_db/settings.py and friends) — the app
@@ -149,23 +155,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Start MinIO
-        # Same image as docker-compose.yml. Run as a step rather than a
-        # service container so the `server /data` command can be given.
-        run: |
-          docker run -d --name minio \
-            -p 9000:9000 \
-            -e MINIO_ROOT_USER=minioadmin \
-            -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/minio:latest server /data
-          for _ in $(seq 1 30); do
-            if curl -sf http://localhost:9000/minio/health/live; then
-              echo "MinIO is ready"; exit 0
-            fi
-            sleep 2
-          done
-          echo "MinIO did not become ready in time"; docker logs minio; exit 1
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
