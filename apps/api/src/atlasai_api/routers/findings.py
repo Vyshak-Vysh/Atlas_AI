@@ -13,7 +13,10 @@ from atlasai_db.repositories.findings import FindingRepository
 router = APIRouter(prefix="/api/v1/findings", tags=["findings"])
 
 
-def _to_response(finding: Finding) -> FindingResponse:
+def finding_to_response(finding: Finding) -> FindingResponse:
+    """Public (not router-private) so other routers — e.g. the space-level
+    findings/report rollups in routers/spaces.py — can reuse the exact same
+    Finding -> FindingResponse mapping instead of re-deriving it."""
     return FindingResponse(
         id=finding.id,
         agent_run_id=finding.agent_run_id,
@@ -49,7 +52,7 @@ async def list_findings(
 ) -> list[FindingResponse]:
     finding_repo = FindingRepository(session, tenant_id=ctx.tenant_id, project_id=ctx.project_id)
     findings = await finding_repo.list_for_project(status=status_filter, limit=limit, offset=offset)
-    return [_to_response(f) for f in findings]
+    return [finding_to_response(f) for f in findings]
 
 
 @router.get("/{finding_id}", response_model=FindingResponse)
@@ -60,4 +63,4 @@ async def get_finding(
 ) -> FindingResponse:
     finding_repo = FindingRepository(session, tenant_id=ctx.tenant_id, project_id=ctx.project_id)
     finding = await finding_repo.get_with_citations(finding_id)
-    return _to_response(finding)
+    return finding_to_response(finding)

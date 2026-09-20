@@ -4,11 +4,11 @@ docs/ERD_FINAL.md §3."""
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Numeric, String, UniqueConstraint, text
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Index, Numeric, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -25,6 +25,8 @@ class Requirement(Base, UUIDPKMixin, TimestampUpdatedMixin):
         Index("ix_requirements_project_task_status", "project_id", "task_status"),
         Index("ix_requirements_project_priority", "project_id", "priority"),
         Index("ix_requirements_assignee", "assignee_id"),
+        Index("ix_requirements_sprint", "sprint_id"),
+        Index("ix_requirements_project_sprint", "project_id", "sprint_id"),
     )
 
     project_id: Mapped[uuid.UUID] = mapped_column(
@@ -32,6 +34,9 @@ class Requirement(Base, UUIDPKMixin, TimestampUpdatedMixin):
     )
     phase_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("phases.id", ondelete="SET NULL")
+    )
+    sprint_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("sprints.id", ondelete="SET NULL")
     )
     key: Mapped[str] = mapped_column(String(80), nullable=False)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
@@ -43,6 +48,7 @@ class Requirement(Base, UUIDPKMixin, TimestampUpdatedMixin):
     # TaskPriority for why these are a separate axis from `status` above.
     task_status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="TO_DO")
     priority: Mapped[str] = mapped_column(String(20), nullable=False, server_default="NORMAL")
+    due_date: Mapped[date | None] = mapped_column(Date)
     assignee_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )

@@ -1,11 +1,12 @@
 "use client";
 
-import { Plus } from "lucide-react";
-import { useParams } from "next/navigation";
+import { Plus, Trash2 } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { useCreatePhase, useProjectOverview, useUpdateProject } from "@/hooks/useProjects";
+import { useCreatePhase, useDeleteProject, useProjectOverview, useUpdateProject } from "@/hooks/useProjects";
 import { useCurrentRole } from "@/hooks/useCurrentWorkspace";
+import { useSpaces } from "@/hooks/useSpaces";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { roleHasPermission } from "@/lib/permissions";
@@ -16,6 +17,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { StatusBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { SkeletonCard } from "@/components/ui/Skeleton";
@@ -33,10 +35,61 @@ export default function ProjectSettingsPage() {
     <div style={{ display: "grid", gap: "var(--space-5)", maxWidth: "44rem" }}>
       <PageHeader title="Project settings" description="Manage this project's details, phases, and team." />
 
-      <ProjectDetailsCard projectId={params.projectId} name={overview.project.name} clientName={overview.project.client_name} status={overview.project.status} canManage={canManage} />
+      <ProjectDetailsCard
+        projectId={params.projectId}
+        name={overview.project.name}
+        clientName={overview.project.client_name}
+        status={overview.project.status}
+        spaceId={overview.project.space_id}
+        canManage={canManage}
+      />
       <PhasesCard projectId={params.projectId} phases={overview.phases} canManage={canManage} />
       <ProjectTeamCard projectId={params.projectId} canManage={canManage} />
+      {canManage && <DangerZoneCard projectId={params.projectId} projectName={overview.project.name} />}
     </div>
+  );
+}
+
+function DangerZoneCard({ projectId, projectName }: { projectId: string; projectName: string }) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const deleteProject = useDeleteProject();
+  const [showDelete, setShowDelete] = useState(false);
+
+  return (
+    <Card style={{ borderColor: "var(--border-danger)" }}>
+      <CardHeader title={<h2 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-danger-700)" }}>Danger zone</h2>} />
+      <CardBody>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-4)" }}>
+          <div>
+            <p style={{ margin: 0, fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)" }}>Delete this project</p>
+            <p style={{ margin: "var(--space-1) 0 0", fontSize: "var(--font-size-xs)", color: "var(--text-tertiary)" }}>
+              Permanently deletes every task, finding, investigation, action, and connector for this project. This can&rsquo;t be undone.
+            </p>
+          </div>
+          <Button variant="danger" size="small" onClick={() => setShowDelete(true)} style={{ flexShrink: 0 }}>
+            <Trash2 size={14} aria-hidden /> Delete project
+          </Button>
+        </div>
+      </CardBody>
+
+      <ConfirmDialog
+        open={showDelete}
+        onClose={() => setShowDelete(false)}
+        title="Delete this project?"
+        description={`This permanently deletes "${projectName}" and every task, finding, investigation, action, and connector inside it. Evidence already synced from its connectors stays available to any other project that also has it in scope. This can't be undone.`}
+        confirmLabel="Delete project"
+        onConfirm={async () => {
+          try {
+            await deleteProject.mutateAsync(projectId);
+            toast({ title: "Project deleted", variant: "success" });
+            router.push("/app/projects");
+          } catch (err) {
+            toast({ title: "Couldn't delete project", description: err instanceof ApiError ? String(err.detail) : undefined, variant: "danger" });
+          }
+        }}
+      />
+    </Card>
   );
 }
 
@@ -45,23 +98,35 @@ function ProjectDetailsCard({
   name,
   clientName,
   status,
+  spaceId,
   canManage,
 }: {
   projectId: string;
   name: string;
   clientName: string | null;
   status: string;
+  spaceId: string | null;
   canManage: boolean;
 }) {
   const update = useUpdateProject(projectId);
+  const { data: spaces } = useSpaces();
   const { toast } = useToast();
   const [localName, setLocalName] = useState(name);
   const [localClient, setLocalClient] = useState(clientName ?? "");
   const [localStatus, setLocalStatus] = useState(status);
+  const [localSpaceId, setLocalSpaceId] = useState(spaceId ?? "");
 
   async function handleSave() {
     try {
-      await update.mutateAsync({ name: localName, client_name: localClient, status: localStatus });
+      await update.mutateAsync({
+        name: localName,
+        client_name: localClient,
+        status: localStatus,
+        // The API has no way to *clear* a project's space back to "none" —
+        // only to set/change it — so an empty selection is simply left out
+        // of the request rather than sent as an empty string.
+        ...(localSpaceId ? { space_id: localSpaceId } : {}),
+      });
       toast({ title: "Project updated", variant: "success" });
     } catch (err) {
       toast({ title: "Couldn't save", description: err instanceof ApiError ? String(err.detail) : undefined, variant: "danger" });
@@ -84,6 +149,22 @@ function ProjectDetailsCard({
               {["ACTIVE", "ON_HOLD", "COMPLETED", "ARCHIVED"].map((s) => (
                 <option key={s} value={s}>
                   {s.replaceAll("_", " ")}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label="Space"
+            htmlFor="pspace"
+            hint={localSpaceId ? "Moving a project changes where it appears in the sidebar tree." : "This project isn't in a space yet."}
+          >
+            <Select id="pspace" value={localSpaceId} onChange={(e) => setLocalSpaceId(e.target.value)} disabled={!canManage}>
+              <option value="" disabled={!!localSpaceId}>
+                No space
+              </option>
+              {(spaces ?? []).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
                 </option>
               ))}
             </Select>

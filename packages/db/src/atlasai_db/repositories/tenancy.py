@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from atlasai_db.exceptions import NotFoundError
-from atlasai_db.models.tenancy import Phase, Project, ProjectMember, Tenant, TenantMember, User
+from atlasai_db.models.tenancy import Phase, Project, ProjectMember, Space, Sprint, Tenant, TenantMember, User
 from atlasai_db.repositories.base import ProjectScopedRepository, TenantScopedRepository
 
 
@@ -211,10 +211,21 @@ class ProjectRepository(TenantScopedRepository[Project]):
         return result.scalar_one_or_none()
 
     async def create(
-        self, *, name: str, client_name: str | None = None, code: str | None = None, timezone: str = "UTC"
+        self,
+        *,
+        name: str,
+        client_name: str | None = None,
+        code: str | None = None,
+        timezone: str = "UTC",
+        space_id: uuid.UUID | None = None,
     ) -> Project:
         project = Project(
-            tenant_id=self.tenant_id, name=name, client_name=client_name, code=code, timezone=timezone
+            tenant_id=self.tenant_id,
+            name=name,
+            client_name=client_name,
+            code=code,
+            timezone=timezone,
+            space_id=space_id,
         )
         return await self.add(project)
 
@@ -225,18 +236,27 @@ class ProjectRepository(TenantScopedRepository[Project]):
         name: str | None = None,
         client_name: str | None = None,
         status: str | None = None,
+        space_id: uuid.UUID | None = None,
     ) -> Project:
         """`None` means "leave unchanged" for every field here — there is no
-        supported way to clear `client_name` back to null via this method,
-        matching the other partial-update endpoints in this codebase."""
+        supported way to clear `client_name`/`space_id` back to null via this
+        method, matching the other partial-update endpoints in this
+        codebase."""
         if name is not None:
             project.name = name
         if client_name is not None:
             project.client_name = client_name
         if status is not None:
             project.status = status
+        if space_id is not None:
+            project.space_id = space_id
         await self.session.flush()
         return project
+
+    async def list_by_space(self, space_id: uuid.UUID) -> list[Project]:
+        query = self._scoped_query().where(Project.space_id == space_id)
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
 
 
 class PhaseRepository(ProjectScopedRepository[Phase]):
@@ -253,3 +273,94 @@ class PhaseRepository(ProjectScopedRepository[Phase]):
             end_date=end_date,
         )
         return await self.add(phase)
+
+
+class SpaceRepository(TenantScopedRepository[Space]):
+    model = Space
+
+    async def get_by_name(self, name: str) -> Space | None:
+        query = self._scoped_query().where(Space.name == name)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
+    async def create(
+        self,
+        *,
+        name: str,
+        description: str | None = None,
+        color: str | None = None,
+    ) -> Space:
+        space = Space(tenant_id=self.tenant_id, name=name, description=description, color=color)
+        return await self.add(space)
+
+    async def update(
+        self,
+        space: Space,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        color: str | None = None,
+        status: str | None = None,
+    ) -> Space:
+        if name is not None:
+            space.name = name
+        if description is not None:
+            space.description = description
+        if color is not None:
+            space.color = color
+        if status is not None:
+            space.status = status
+        await self.session.flush()
+        return space
+
+    async def count_projects(self, space_id: uuid.UUID) -> int:
+        result = await self.session.execute(
+            select(func.count()).select_from(Project).where(Project.space_id == space_id)
+        )
+        return int(result.scalar_one())
+
+
+class SprintRepository(ProjectScopedRepository[Sprint]):
+    model = Sprint
+
+    async def get_by_number(self, sprint_number: int) -> Sprint | None:
+        query = self._scoped_query().where(Sprint.sprint_number == sprint_number)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
+    async def create(
+        self,
+        *,
+        name: str,
+        sprint_number: int,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> Sprint:
+        sprint = Sprint(
+            project_id=self.project_id,
+            name=name,
+            sprint_number=sprint_number,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return await self.add(sprint)
+
+    async def update(
+        self,
+        sprint: Sprint,
+        *,
+        name: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        status: str | None = None,
+    ) -> Sprint:
+        if name is not None:
+            sprint.name = name
+        if start_date is not None:
+            sprint.start_date = start_date
+        if end_date is not None:
+            sprint.end_date = end_date
+        if status is not None:
+            sprint.status = status
+        await self.session.flush()
+        return sprint

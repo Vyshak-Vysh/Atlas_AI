@@ -12,8 +12,9 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from atlasai_api.logging import configure_logging, get_logger
 from atlasai_api.middleware import RequestIDMiddleware
@@ -31,13 +32,32 @@ from atlasai_api.routers import (
     reports,
     requirements,
     sources,
+    spaces,
+    sprints,
     tenants,
     users,
 )
 from atlasai_api.settings import CORSSettings
+from atlasai_db.exceptions import NotFoundError
 
 configure_logging()
 logger = get_logger(__name__)
+
+
+async def _handle_not_found(request: Request, exc: Exception) -> JSONResponse:  # noqa: ARG001
+    """Global safety net for `NotFoundError` (see atlasai_db.exceptions'
+    docstring: it is deliberately the *only* thing a cross-tenant/
+    cross-project lookup ever raises). Most routers already catch this
+    locally for a tailored `detail` message; this handler exists so any
+    endpoint that forgets to catch it still returns a clean 404 instead of
+    an unhandled-exception 500.
+
+    Starlette's `add_exception_handler` overloads require an `Exception`
+    parameter type (not the narrower `NotFoundError`); it only ever
+    dispatches this handler for `NotFoundError`, per the registration below.
+    """
+    assert isinstance(exc, NotFoundError)
+    return JSONResponse(status_code=404, content={"detail": f"{exc.model_name} not found"})
 
 
 @asynccontextmanager
@@ -62,12 +82,15 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_exception_handler(NotFoundError, _handle_not_found)
 
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(users.router)
     app.include_router(tenants.router)
     app.include_router(projects.router)
+    app.include_router(spaces.router)
+    app.include_router(sprints.router)
     app.include_router(documents.router)
     app.include_router(sources.router)
     app.include_router(evidence.router)

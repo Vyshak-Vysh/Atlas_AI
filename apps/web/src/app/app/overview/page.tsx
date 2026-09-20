@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckSquare, FolderKanban, Plus, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckSquare, FolderKanban, Layers, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 import { useAuditEvents } from "@/hooks/useAuditEvents";
@@ -8,6 +8,7 @@ import { usePendingApprovalNotifications } from "@/hooks/useNotifications";
 import { useProjects } from "@/hooks/useProjects";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useFindingsAcrossProjects } from "@/hooks/useWorkspaceSummary";
+import { useSpaces } from "@/hooks/useSpaces";
 import { findingStatusDisplay, projectStatusDisplay } from "@/lib/status";
 import { formatRelativeTime } from "@/lib/format";
 import { ActivityFeed } from "@/components/shell/ActivityFeed";
@@ -26,6 +27,7 @@ export default function OverviewPage() {
   const { all: allFindings, isLoading: findingsLoading } = useFindingsAcrossProjects();
   const { items: pendingApprovals } = usePendingApprovalNotifications();
   const { data: auditEvents } = useAuditEvents(15);
+  const { data: spaces, isLoading: spacesLoading } = useSpaces();
 
   const activeProjects = (projects ?? []).filter((p) => p.status === "ACTIVE");
   const conflicting = allFindings.filter((f) => f.finding.status === "CONFLICTING");
@@ -178,6 +180,47 @@ export default function OverviewPage() {
             <CardHeader title={<h2 style={{ margin: 0, fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-semibold)" }}>Recent activity</h2>} />
             <CardBody>
               <ActivityFeed events={auditEvents ?? []} />
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title={<h2 style={{ margin: 0, fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-semibold)" }}>Clients</h2>}
+              actions={
+                <Link href="/app/spaces" style={{ fontSize: "var(--font-size-sm)" }}>
+                  View all
+                </Link>
+              }
+            />
+            <CardBody>
+              {spacesLoading ? (
+                <SkeletonLines count={3} />
+              ) : !spaces || spaces.length === 0 ? (
+                <EmptyState
+                  icon={Layers}
+                  title="No spaces yet"
+                  description="Group a client's projects into a Space to see their findings, evidence, and reports rolled up in one place."
+                  actions={
+                    <Link href="/app/spaces">
+                      <Button size="small">Create a space</Button>
+                    </Link>
+                  }
+                />
+              ) : (
+                <div style={{ display: "grid", gap: "var(--space-2)" }}>
+                  {spaces.slice(0, 6).map((space) => (
+                    <Link
+                      key={space.id}
+                      href={`/app/spaces/${space.id}`}
+                      className="card card--interactive"
+                      style={{ padding: "var(--space-3) var(--space-4)", display: "flex", alignItems: "center", gap: "var(--space-3)", textDecoration: "none", color: "inherit" }}
+                    >
+                      <span className="sidebar-tree-dot" style={{ background: space.color ?? "var(--color-brand-500)" }} aria-hidden />
+                      <span style={{ fontWeight: "var(--font-weight-medium)", fontSize: "var(--font-size-sm)" }}>{space.name}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </CardBody>
           </Card>
         </div>

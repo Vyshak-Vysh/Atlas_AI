@@ -78,6 +78,19 @@ const PHASE_STATUS: Record<string, StatusDisplay> = {
   CANCELLED: { label: "Cancelled", className: "status-superseded" },
 };
 
+const SPACE_STATUS: Record<string, StatusDisplay> = {
+  ACTIVE: { label: "Active", className: "status-in-scope" },
+  ON_HOLD: { label: "On hold", className: "status-partial" },
+  ARCHIVED: { label: "Archived", className: "status-superseded" },
+};
+
+const SPRINT_STATUS: Record<string, StatusDisplay> = {
+  PLANNED: { label: "Planned", className: "status-not-verified" },
+  ACTIVE: { label: "Active", className: "status-pending-approval" },
+  COMPLETED: { label: "Completed", className: "status-delivered" },
+  CANCELLED: { label: "Cancelled", className: "status-superseded" },
+};
+
 // Day-to-day task board state — a separate axis from REQUIREMENT_STATUS
 // above (evidence-verification lifecycle). Keep these two displays
 // visually distinct wherever both appear (see the requirements list page).
@@ -125,6 +138,8 @@ export const agentRunStatusDisplay = (value: string): StatusDisplay => lookup(AG
 export const connectorStatusDisplay = (value: string): StatusDisplay => lookup(CONNECTOR_STATUS, value);
 export const projectStatusDisplay = (value: string): StatusDisplay => lookup(PROJECT_STATUS, value);
 export const phaseStatusDisplay = (value: string): StatusDisplay => lookup(PHASE_STATUS, value);
+export const spaceStatusDisplay = (value: string): StatusDisplay => lookup(SPACE_STATUS, value);
+export const sprintStatusDisplay = (value: string): StatusDisplay => lookup(SPRINT_STATUS, value);
 
 export const FINDING_TYPE_LABELS: Record<string, string> = {
   IN_SCOPE_SUPPORTED: "In scope",

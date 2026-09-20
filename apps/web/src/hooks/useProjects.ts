@@ -18,7 +18,7 @@ export function useCreateProject() {
   const { session } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; client_name?: string; code?: string }) =>
+    mutationFn: (body: { name: string; client_name?: string; code?: string; space_id?: string }) =>
       api.createProject({ tenant_id: session!.tenantId, ...body }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects", session?.tenantId] });
@@ -38,11 +38,24 @@ export function useProjectOverview(projectId: string | undefined) {
 export function useUpdateProject(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name?: string; client_name?: string; status?: string }) =>
+    mutationFn: (body: { name?: string; client_name?: string; status?: string; space_id?: string }) =>
       api.updateProject(projectId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project-overview", projectId] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["space-projects"] });
+    },
+  });
+}
+
+export function useDeleteProject() {
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) => api.deleteProject(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects", session?.tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["space-projects"] });
     },
   });
 }

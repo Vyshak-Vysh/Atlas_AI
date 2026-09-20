@@ -19,6 +19,13 @@ import type {
   RequirementHistoryEntryResponse,
   RequirementResponse,
   SourceRecordResponse,
+  SpaceActionItem,
+  SpaceFindingItem,
+  SpaceOverviewResponse,
+  SpaceReportResponse,
+  SpaceResponse,
+  SprintDetailResponse,
+  SprintResponse,
   SyncRunResponse,
   TenantMemberDetailResponse,
   TenantResponse,
@@ -159,11 +166,81 @@ export const api = {
   listProjects: (tenantId: string) =>
     request<ProjectResponse[]>("/api/v1/projects", { query: { tenant_id: tenantId } }),
 
-  createProject: (body: { tenant_id: string; name: string; client_name?: string; code?: string }) =>
-    request<ProjectResponse>("/api/v1/projects", { method: "POST", json: body }),
+  createProject: (body: {
+    tenant_id: string;
+    name: string;
+    client_name?: string;
+    code?: string;
+    space_id?: string;
+  }) => request<ProjectResponse>("/api/v1/projects", { method: "POST", json: body }),
 
-  updateProject: (projectId: string, body: { name?: string; client_name?: string; status?: string }) =>
-    request<ProjectResponse>(`/api/v1/projects/${projectId}`, { method: "PATCH", json: body }),
+  updateProject: (
+    projectId: string,
+    body: { name?: string; client_name?: string; status?: string; space_id?: string },
+  ) => request<ProjectResponse>(`/api/v1/projects/${projectId}`, { method: "PATCH", json: body }),
+
+  deleteProject: (projectId: string) => request<void>(`/api/v1/projects/${projectId}`, { method: "DELETE" }),
+
+  // --- Spaces -------------------------------------------------------------
+  listSpaces: (tenantId: string) =>
+    request<SpaceResponse[]>("/api/v1/spaces", { query: { tenant_id: tenantId } }),
+
+  createSpace: (body: { tenant_id: string; name: string; description?: string; color?: string }) =>
+    request<SpaceResponse>("/api/v1/spaces", { method: "POST", json: body }),
+
+  getSpaceOverview: (spaceId: string, tenantId: string) =>
+    request<SpaceOverviewResponse>(`/api/v1/spaces/${spaceId}`, { query: { tenant_id: tenantId } }),
+
+  listSpaceProjects: (spaceId: string, tenantId: string) =>
+    request<ProjectResponse[]>(`/api/v1/spaces/${spaceId}/projects`, { query: { tenant_id: tenantId } }),
+
+  updateSpace: (
+    spaceId: string,
+    tenantId: string,
+    body: { name?: string; description?: string; color?: string; status?: string },
+  ) =>
+    request<SpaceResponse>(`/api/v1/spaces/${spaceId}`, {
+      method: "PATCH",
+      query: { tenant_id: tenantId },
+      json: body,
+    }),
+
+  deleteSpace: (spaceId: string, tenantId: string) =>
+    request<void>(`/api/v1/spaces/${spaceId}`, { method: "DELETE", query: { tenant_id: tenantId } }),
+
+  listSpaceFindings: (spaceId: string, tenantId: string, status?: string) =>
+    request<SpaceFindingItem[]>(`/api/v1/spaces/${spaceId}/findings`, {
+      query: { tenant_id: tenantId, status },
+    }),
+
+  listSpaceActions: (spaceId: string, tenantId: string, status?: string) =>
+    request<SpaceActionItem[]>(`/api/v1/spaces/${spaceId}/actions`, {
+      query: { tenant_id: tenantId, status },
+    }),
+
+  getSpaceReport: (spaceId: string, tenantId: string) =>
+    request<SpaceReportResponse>(`/api/v1/spaces/${spaceId}/report`, { query: { tenant_id: tenantId } }),
+
+  // --- Sprints --------------------------------------------------------------
+  listSprints: (projectId: string) => request<SprintResponse[]>(`/api/v1/projects/${projectId}/sprints`),
+
+  createSprint: (
+    projectId: string,
+    body: { name: string; sprint_number: number; start_date?: string; end_date?: string },
+  ) => request<SprintResponse>(`/api/v1/projects/${projectId}/sprints`, { method: "POST", json: body }),
+
+  getSprint: (projectId: string, sprintId: string) =>
+    request<SprintDetailResponse>(`/api/v1/projects/${projectId}/sprints/${sprintId}`),
+
+  updateSprint: (
+    projectId: string,
+    sprintId: string,
+    body: { name?: string; start_date?: string; end_date?: string; status?: string },
+  ) =>
+    request<SprintResponse>(`/api/v1/projects/${projectId}/sprints/${sprintId}`, {
+      method: "PATCH",
+      json: body,
+    }),
 
   getProjectOverview: (projectId: string) =>
     request<ProjectOverviewResponse>(`/api/v1/projects/${projectId}/overview`),
@@ -275,7 +352,14 @@ export const api = {
   // --- Requirements (tasks) --------------------------------------------------
   listRequirements: (
     projectId: string,
-    filters?: { status?: string; phaseId?: string; taskStatus?: string; priority?: string; assigneeId?: string },
+    filters?: {
+      status?: string;
+      phaseId?: string;
+      taskStatus?: string;
+      priority?: string;
+      assigneeId?: string;
+      sprintId?: string;
+    },
   ) =>
     request<RequirementResponse[]>("/api/v1/requirements", {
       query: {
@@ -285,6 +369,7 @@ export const api = {
         task_status: filters?.taskStatus,
         priority: filters?.priority,
         assignee_id: filters?.assigneeId,
+        sprint_id: filters?.sprintId,
       },
     }),
 
@@ -295,9 +380,11 @@ export const api = {
       title: string;
       status: string;
       phase_id?: string;
+      sprint_id?: string;
       description?: string;
       task_status?: string;
       priority?: string;
+      due_date?: string;
       assignee_id?: string;
     },
   ) =>
@@ -320,9 +407,11 @@ export const api = {
       description?: string | null;
       status?: string;
       phase_id?: string | null;
+      sprint_id?: string | null;
       acceptance_criteria?: unknown[];
       task_status?: string;
       priority?: string;
+      due_date?: string | null;
       assignee_id?: string | null;
     },
   ) =>

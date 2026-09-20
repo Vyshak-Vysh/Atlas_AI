@@ -1,16 +1,17 @@
 "use client";
 
 import { ArrowLeft, ArrowRight, Check, FileUp, Mail, MessageSquare } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import { useSpaces } from "@/hooks/useSpaces";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody } from "@/components/ui/Card";
-import { Field, Input } from "@/components/ui/Field";
+import { Field, Input, Select } from "@/components/ui/Field";
 
 interface PhaseDraft {
   name: string;
@@ -22,7 +23,9 @@ const STEPS = ["Basic details", "Project structure", "Connect sources", "Review 
 export default function NewProjectPage() {
   const { session } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { data: spaces } = useSpaces();
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +33,7 @@ export default function NewProjectPage() {
   const [name, setName] = useState("");
   const [clientName, setClientName] = useState("");
   const [code, setCode] = useState("");
+  const [spaceId, setSpaceId] = useState(searchParams.get("spaceId") ?? "");
   const [phases, setPhases] = useState<PhaseDraft[]>([{ name: "Phase 1", phase_number: 1 }]);
   const [connectManualUpload, setConnectManualUpload] = useState(true);
 
@@ -57,6 +61,7 @@ export default function NewProjectPage() {
         name: name.trim(),
         client_name: clientName.trim() || undefined,
         code: code.trim() || undefined,
+        space_id: spaceId || undefined,
       });
 
       for (const phase of phases) {
@@ -129,6 +134,16 @@ export default function NewProjectPage() {
               </Field>
               <Field label="Project code" htmlFor="code" hint="Optional short identifier, e.g. ACME-01.">
                 <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} />
+              </Field>
+              <Field label="Space" htmlFor="spaceId" hint="Optional — group this project under a Space.">
+                <Select id="spaceId" value={spaceId} onChange={(e) => setSpaceId(e.target.value)}>
+                  <option value="">No space</option>
+                  {(spaces ?? []).map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </Select>
               </Field>
             </div>
           )}
@@ -211,6 +226,7 @@ export default function NewProjectPage() {
               <SummaryRow label="Name" value={name} />
               <SummaryRow label="Client" value={clientName || "—"} />
               <SummaryRow label="Code" value={code || "—"} />
+              <SummaryRow label="Space" value={spaces?.find((s) => s.id === spaceId)?.name ?? "None"} />
               <SummaryRow label="Phases" value={phases.filter((p) => p.name.trim()).map((p) => p.name).join(", ") || "None"} />
               <SummaryRow label="Sources" value={connectManualUpload ? "Manual upload" : "None yet"} />
               <SummaryRow label="Your role" value="AI Engineer Admin (project creator)" />

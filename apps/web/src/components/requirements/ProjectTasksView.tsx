@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, LayoutGrid, List, Plus } from "lucide-react";
+import { CalendarRange, ClipboardList, LayoutGrid, List, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { useCurrentRole } from "@/hooks/useCurrentWorkspace";
@@ -10,11 +10,13 @@ import { useCreateRequirement, useRequirements } from "@/hooks/useRequirements";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { roleHasPermission } from "@/lib/permissions";
-import { requirementStatusDisplay, taskPriorityDisplay, taskStatusDisplay, TASK_PRIORITIES, TASK_STATUS_COLUMNS } from "@/lib/status";
+import { useSprints } from "@/hooks/useSprints";
+import { requirementStatusDisplay, taskPriorityDisplay, TASK_PRIORITIES, TASK_STATUS_COLUMNS } from "@/lib/status";
 import { KanbanBoard } from "./KanbanBoard";
+import { ManageSprintsDialog } from "./ManageSprintsDialog";
+import { TaskListView } from "./TaskListView";
 import { TaskDetailDrawer } from "./TaskDetailDrawer";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { StatusBadge, Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -44,7 +46,7 @@ type View = "list" | "board";
  * The full task board/list for one project — filters, view toggle, create
  * dialog, and task detail drawer. Shared by the per-project "Tasks" nav
  * item (apps/app/projects/[projectId]/requirements/page.tsx) and the
- * cross-project "Project Space" hub (apps/app/project-space/page.tsx), so
+ * cross-project "My Work" hub (apps/app/project-space/page.tsx), so
  * a task-management change here reaches both entry points.
  */
 export function ProjectTasksView({
@@ -59,21 +61,21 @@ export function ProjectTasksView({
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [taskStatusFilter, setTaskStatusFilter] = useState("ALL");
   const [priorityFilter, setPriorityFilter] = useState("ALL");
+  const [sprintFilter, setSprintFilter] = useState("ALL");
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const { data: requirements, isLoading, error, refetch } = useRequirements(projectId, {
     status: statusFilter === "ALL" ? undefined : statusFilter,
     taskStatus: taskStatusFilter === "ALL" ? undefined : taskStatusFilter,
     priority: priorityFilter === "ALL" ? undefined : priorityFilter,
+    sprintId: sprintFilter === "ALL" ? undefined : sprintFilter,
   });
   const { data: overview } = useProjectOverview(projectId);
-  const { data: members } = useProjectMembers(projectId);
+  const { data: sprints } = useSprints(projectId);
   const [showCreate, setShowCreate] = useState(false);
+  const [showManageSprints, setShowManageSprints] = useState(false);
 
   const canCreate = roleHasPermission(role, "CREATE_TASK");
   const canEdit = roleHasPermission(role, "EDIT_TASK");
-
-  const phaseName = (phaseId: string | null) => overview?.phases.find((p) => p.id === phaseId)?.name ?? "—";
-  const assigneeName = (userId: string | null) => members?.find((m) => m.user_id === userId)?.display_name ?? "Unassigned";
 
   const viewToggle = (
     <div style={{ display: "flex", gap: "var(--space-2)" }}>
@@ -95,6 +97,9 @@ export function ProjectTasksView({
           <List size={14} aria-hidden /> List
         </button>
       </div>
+      <Button variant="secondary" onClick={() => setShowManageSprints(true)}>
+        <CalendarRange size={16} aria-hidden /> Sprints
+      </Button>
       {canCreate && (
         <Button onClick={() => setShowCreate(true)}>
           <Plus size={16} aria-hidden /> Add task
@@ -136,6 +141,14 @@ export function ProjectTasksView({
             </option>
           ))}
         </select>
+        <select className="select" style={{ maxWidth: "14rem" }} value={sprintFilter} onChange={(e) => setSprintFilter(e.target.value)}>
+          <option value="ALL">All sprints</option>
+          {(sprints ?? []).map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {error ? (
@@ -152,43 +165,11 @@ export function ProjectTasksView({
       ) : view === "board" ? (
         <KanbanBoard requirements={requirements} projectId={projectId} canDrag={canEdit} onOpenTask={setOpenTaskId} />
       ) : (
-        <div className="table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Key</th>
-                <th>Title</th>
-                <th>Task status</th>
-                <th>Priority</th>
-                <th>Assignee</th>
-                <th>Phase</th>
-                <th>Verification status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requirements.map((req) => (
-                <tr key={req.id} className="is-clickable" onClick={() => setOpenTaskId(req.id)}>
-                  <td style={{ fontFamily: "var(--font-family-mono)", fontSize: "var(--font-size-xs)" }}>{req.key}</td>
-                  <td>{req.title}</td>
-                  <td>
-                    <StatusBadge status={taskStatusDisplay(req.task_status)} />
-                  </td>
-                  <td>
-                    <Badge variant={taskPriorityDisplay(req.priority).variant}>{taskPriorityDisplay(req.priority).label}</Badge>
-                  </td>
-                  <td>{assigneeName(req.assignee_id)}</td>
-                  <td>{phaseName(req.phase_id)}</td>
-                  <td>
-                    <StatusBadge status={requirementStatusDisplay(req.status)} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <TaskListView requirements={requirements} projectId={projectId} onOpenTask={setOpenTaskId} />
       )}
 
       <CreateRequirementDialog open={showCreate} onClose={() => setShowCreate(false)} projectId={projectId} phases={overview?.phases ?? []} />
+      <ManageSprintsDialog open={showManageSprints} onClose={() => setShowManageSprints(false)} projectId={projectId} />
 
       <TaskDetailDrawer requirementId={openTaskId} projectId={projectId} onClose={() => setOpenTaskId(null)} />
     </div>
@@ -208,6 +189,7 @@ function CreateRequirementDialog({
 }) {
   const createRequirement = useCreateRequirement(projectId);
   const { data: members } = useProjectMembers(projectId);
+  const { data: sprints } = useSprints(projectId);
   const [key, setKey] = useState("");
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState("CAPTURED");
@@ -215,6 +197,8 @@ function CreateRequirementDialog({
   const [priority, setPriority] = useState("NORMAL");
   const [assigneeId, setAssigneeId] = useState("");
   const [phaseId, setPhaseId] = useState("");
+  const [sprintId, setSprintId] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -229,12 +213,16 @@ function CreateRequirementDialog({
         priority,
         assignee_id: assigneeId || undefined,
         phase_id: phaseId || undefined,
+        sprint_id: sprintId || undefined,
+        due_date: dueDate || undefined,
         description: description.trim() || undefined,
       });
       setKey("");
       setTitle("");
       setDescription("");
       setAssigneeId("");
+      setSprintId("");
+      setDueDate("");
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? String(err.detail ?? err.message) : "Failed to create task.");
@@ -299,15 +287,30 @@ function CreateRequirementDialog({
             ))}
           </Select>
         </Field>
-        <Field label="Phase" htmlFor="req-phase">
-          <Select id="req-phase" value={phaseId} onChange={(e) => setPhaseId(e.target.value)}>
-            <option value="">No phase</option>
-            {phases.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-4)" }}>
+          <Field label="Phase" htmlFor="req-phase">
+            <Select id="req-phase" value={phaseId} onChange={(e) => setPhaseId(e.target.value)}>
+              <option value="">No phase</option>
+              {phases.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Sprint" htmlFor="req-sprint">
+            <Select id="req-sprint" value={sprintId} onChange={(e) => setSprintId(e.target.value)}>
+              <option value="">No sprint</option>
+              {(sprints ?? []).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <Field label="Due date" htmlFor="req-due-date">
+          <Input id="req-due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </Field>
         <Field label="Verification status" htmlFor="req-status" hint="Evidence-backed scope/delivery status — separate from task status above.">
           <Select id="req-status" value={status} onChange={(e) => setStatus(e.target.value)}>

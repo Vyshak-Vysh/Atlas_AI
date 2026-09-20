@@ -1,11 +1,12 @@
 "use client";
 
-import { FolderKanban, Search } from "lucide-react";
+import { FolderKanban, Layers, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useProjects } from "@/hooks/useProjects";
+import { useSpaces } from "@/hooks/useSpaces";
 import { PRIMARY_NAV } from "@/lib/nav";
 import { useUiStore } from "@/store/ui";
 
@@ -16,6 +17,7 @@ export function CommandPalette() {
   const [activeIndex, setActiveIndex] = useState(0);
   const router = useRouter();
   const { data: projects } = useProjects();
+  const { data: spaces } = useSpaces();
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -44,9 +46,14 @@ export function CommandPalette() {
     () => (projects ?? []).filter((p) => p.name.toLowerCase().includes(query.toLowerCase())).slice(0, 6),
     [projects, query],
   );
+  const spaceMatches = useMemo(
+    () => (spaces ?? []).filter((s) => s.name.toLowerCase().includes(query.toLowerCase())).slice(0, 6),
+    [spaces, query],
+  );
 
   const flatResults = [
     ...navMatches.map((item) => ({ type: "nav" as const, href: item.href, label: item.label, icon: item.icon })),
+    ...spaceMatches.map((s) => ({ type: "space" as const, href: `/app/spaces/${s.id}`, label: s.name })),
     ...projectMatches.map((p) => ({ type: "project" as const, href: `/app/projects/${p.id}/overview`, label: p.name })),
   ];
 
@@ -84,7 +91,7 @@ export function CommandPalette() {
           <input
             autoFocus
             className="command-palette__input"
-            placeholder="Search projects, findings, evidence…"
+            placeholder="Search spaces, projects, pages…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Command palette search"
@@ -108,6 +115,27 @@ export function CommandPalette() {
                     onMouseEnter={() => setActiveIndex(flatIndex)}
                   >
                     <Icon size={16} aria-hidden /> {item.label}
+                  </button>
+                );
+              })}
+            </>
+          )}
+          {spaceMatches.length > 0 && (
+            <>
+              <p className="command-palette__group-label">Spaces</p>
+              {spaceMatches.map((s) => {
+                const href = `/app/spaces/${s.id}`;
+                const flatIndex = flatResults.findIndex((r) => r.href === href && r.type === "space");
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="command-palette__item"
+                    data-active={flatIndex === activeIndex}
+                    onClick={() => go(href)}
+                    onMouseEnter={() => setActiveIndex(flatIndex)}
+                  >
+                    <Layers size={16} aria-hidden /> {s.name}
                   </button>
                 );
               })}

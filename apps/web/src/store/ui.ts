@@ -14,6 +14,12 @@ interface UiState {
   setCommandPaletteOpen: (open: boolean) => void;
   theme: ThemePreference;
   setTheme: (theme: ThemePreference) => void;
+  /** Which sidebar tree rows (Spaces/Projects) are expanded, keyed by
+   * "space:<id>" / "project:<id>" / "ungrouped". Plain string[] (not a
+   * Set) because zustand's `persist` JSON-serializes state as-is. */
+  expandedNavIds: string[];
+  toggleNavExpanded: (id: string) => void;
+  expandNavIds: (ids: string[]) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -27,10 +33,25 @@ export const useUiStore = create<UiState>()(
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
       theme: "system",
       setTheme: (theme) => set({ theme }),
+      expandedNavIds: [],
+      toggleNavExpanded: (id) =>
+        set({
+          expandedNavIds: get().expandedNavIds.includes(id)
+            ? get().expandedNavIds.filter((existing) => existing !== id)
+            : [...get().expandedNavIds, id],
+        }),
+      expandNavIds: (ids) => {
+        const missing = ids.filter((id) => !get().expandedNavIds.includes(id));
+        if (missing.length > 0) set({ expandedNavIds: [...get().expandedNavIds, ...missing] });
+      },
     }),
     {
       name: "atlasai.ui",
-      partialize: (state) => ({ sidebarCollapsed: state.sidebarCollapsed, theme: state.theme }),
+      partialize: (state) => ({
+        sidebarCollapsed: state.sidebarCollapsed,
+        theme: state.theme,
+        expandedNavIds: state.expandedNavIds,
+      }),
     },
   ),
 );

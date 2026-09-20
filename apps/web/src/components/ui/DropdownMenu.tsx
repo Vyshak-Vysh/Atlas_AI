@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 interface DropdownMenuProps {
@@ -31,15 +32,26 @@ export function DropdownMenu({ trigger, children, align = "right" }: DropdownMen
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
       <span onClick={() => setOpen((o) => !o)}>{trigger}</span>
-      {open && (
-        <div
-          className="menu-popover"
-          style={align === "right" ? { right: 0, top: "calc(100% + 0.4rem)" } : { left: 0, top: "calc(100% + 0.4rem)" }}
-          onClick={() => setOpen(false)}
-        >
-          {children}
-        </div>
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            className="menu-popover"
+            style={{
+              position: "absolute",
+              ...(align === "right" ? { right: 0 } : { left: 0 }),
+              top: "calc(100% + 0.4rem)",
+              transformOrigin: align === "right" ? "top right" : "top left",
+            }}
+            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+            transition={{ duration: 0.12, ease: [0.2, 0.8, 0.2, 1] }}
+            onClick={() => setOpen(false)}
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

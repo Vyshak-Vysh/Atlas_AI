@@ -1,13 +1,18 @@
 :root {
-  /* Brand */
-  --color-brand-950: #10263a;
-  --color-brand-900: #12304a;
-  --color-brand-800: #174363;
-  --color-brand-700: #1b5e9e;
-  --color-brand-600: #2879bd;
-  --color-brand-500: #3f91d0;
-  --color-brand-100: #dcecf8;
-  --color-brand-50: #f1f7fc;
+  /* Brand — vivid violet/indigo, not the previous navy blue. Chosen after
+     pulling the connected ClickUp workspace's real task/status data: its
+     signature is richly saturated, distinct-per-status color (a lime
+     "prioritized," an indigo "in progress," a burnt-orange "in review"),
+     not a muted single-hue system — see the tokens below and
+     components.css's .status-* blocks for where that shows up. */
+  --color-brand-950: #2e1065;
+  --color-brand-900: #4c1d95;
+  --color-brand-800: #5b21b6;
+  --color-brand-700: #6d28d9;
+  --color-brand-600: #7c3aed;
+  --color-brand-500: #8b5cf6;
+  --color-brand-100: #ede9fe;
+  --color-brand-50: #f5f3ff;
 
   /* Neutral scale */
   --color-neutral-0: #ffffff;
@@ -24,37 +29,44 @@
   --color-neutral-900: #17232e;
   --color-neutral-950: #0b141c;
 
-  /* Semantic colors */
-  --color-success-700: #166534;
-  --color-success-600: #207a45;
+  /* Semantic colors — pushed more saturated/vivid to match the connected
+     ClickUp workspace's actual status palette (e.g. its "yet to start" is
+     #e5484d, reused directly below as --color-danger-600) rather than the
+     previous muted pastel set. */
+  --color-success-700: #15803d;
+  --color-success-600: #16a34a;
   --color-success-100: #dcfce7;
   --color-success-50: #f0fdf4;
 
-  --color-warning-700: #92400e;
-  --color-warning-600: #b36b16;
+  --color-warning-700: #b45309;
+  --color-warning-600: #d97706;
   --color-warning-100: #fef3c7;
   --color-warning-50: #fffbeb;
 
-  --color-danger-700: #991b1b;
-  --color-danger-600: #c24141;
+  --color-danger-700: #b91c1c;
+  --color-danger-600: #e5484d;
   --color-danger-100: #fee2e2;
   --color-danger-50: #fef2f2;
 
-  --color-info-700: #075985;
-  --color-info-600: #1b5e9e;
+  --color-info-700: #1d4ed8;
+  --color-info-600: #2563eb;
   --color-info-100: #dbeafe;
   --color-info-50: #eff6ff;
 
-  --color-discovery-700: #5b21b6;
-  --color-discovery-600: #6c4aa1;
-  --color-discovery-100: #ede9fe;
-  --color-discovery-50: #f5f3ff;
+  /* Discovery ("AI-drafted" tags, ai-tag/human-tag) is deliberately NOT
+     violet — now that Brand itself is violet, discovery needed its own
+     hue so an AI-origin marker still reads as visually distinct from a
+     primary action/link, so it moved to magenta/fuchsia instead. */
+  --color-discovery-700: #a21caf;
+  --color-discovery-600: #c026d3;
+  --color-discovery-100: #fae8ff;
+  --color-discovery-50: #fdf4ff;
 
   /* Product-specific evidence colors */
   --color-evidence-source: #64748b;
   --color-evidence-claim: #2563eb;
   --color-evidence-requirement: #0f766e;
-  --color-evidence-decision: #7c3aed;
+  --color-evidence-decision: #4f46e5;
   --color-evidence-finding: #c2410c;
   --color-evidence-action: #166534;
 
@@ -98,7 +110,7 @@
 
   /* Typography */
   --font-family-sans:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    var(--font-inter), Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-family-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 
   --font-size-2xs: 0.6875rem;
@@ -136,14 +148,15 @@
   --space-16: 4rem;
   --space-20: 5rem;
 
-  /* Radius */
+  /* Radius — rounder across the board than before, for the friendlier,
+     more contemporary feel the new palette is going for. */
   --radius-none: 0;
-  --radius-xs: 0.25rem;
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.25rem;
+  --radius-xs: 0.3125rem;
+  --radius-sm: 0.4375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
   --radius-full: 9999px;
 
   /* Shadows */
@@ -206,6 +219,58 @@
     --border-strong: #526575;
     --border-focus: #75b9ee;
 
+    /* Semantic status-color stops used by badges, status pills, ai-tag/
+       human-tag, and callout boxes (components.css's `.badge--*`,
+       `.status-*`, `.ai-tag`/`.human-tag`, `.*-callout`) — all of them pair
+       a "-700" text color with a "-100"/"-50" background, tuned for a
+       WHITE card. Left unredefined, every one of those rendered as a
+       light pastel chip on top of the dark cards above, which is why
+       every status badge across Findings/Requirements/Approvals/Evidence
+       looked broken the moment dark mode was toggled. The "-600" stops
+       (solid accents: chart lines, meters, left-border accents) are
+       intentionally NOT redefined here — they're already mid-saturation
+       tones that read fine on both light and dark surfaces. */
+    --color-success-700: #6ee7b7;
+    --color-success-100: #113822;
+    --color-success-50: #0f2a1a;
+
+    --color-warning-700: #fbbf24;
+    --color-warning-100: #3a2a0d;
+    --color-warning-50: #2b1f09;
+
+    --color-danger-700: #fca5a5;
+    --color-danger-100: #3a1414;
+    --color-danger-50: #2b0f0f;
+
+    --color-info-700: #7dd3fc;
+    --color-info-100: #0e2a3d;
+    --color-info-50: #0b2230;
+
+    --color-discovery-700: #f0abfc;
+    --color-discovery-100: #4a044e;
+    --color-discovery-50: #3a0740;
+
+    /* Same fix for the neutral-scale badges (status-not-verified,
+       status-superseded, uncertainty-callout) — these three stops have no
+       other consumers outside that badge/callout system (surface-subtle,
+       surface-muted, border-subtle, and text-secondary all read from the
+       neutral scale at :root, but are independently redefined to literal
+       dark values above, so they don't inherit this override). */
+    --color-neutral-700: #cbd5df;
+    --color-neutral-600: #9aaabd;
+    --color-neutral-200: #263746;
+    --color-neutral-100: #1f2e3a;
+
+    /* The light-mode shadows are a dark navy at very low opacity, tuned to
+       show up against a near-white page — against a near-black page they
+       were nearly invisible, so cards/dialogs/dropdowns lost their
+       elevation cue entirely in dark mode. Pure black at higher opacity
+       reads clearly against the dark surface scale above. */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.32);
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.38);
+    --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.46);
+    --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.56);
+
     color-scheme: dark;
   }
 }
@@ -234,6 +299,38 @@
   --border-default: #374957;
   --border-strong: #526575;
   --border-focus: #75b9ee;
+
+  /* Keep in sync with the prefers-color-scheme block above — see its
+     comment for why these specific stops (and no others) are redefined. */
+  --color-success-700: #6ee7b7;
+  --color-success-100: #113822;
+  --color-success-50: #0f2a1a;
+
+  --color-warning-700: #fbbf24;
+  --color-warning-100: #3a2a0d;
+  --color-warning-50: #2b1f09;
+
+  --color-danger-700: #fca5a5;
+  --color-danger-100: #3a1414;
+  --color-danger-50: #2b0f0f;
+
+  --color-info-700: #7dd3fc;
+  --color-info-100: #0e2a3d;
+  --color-info-50: #0b2230;
+
+  --color-discovery-700: #f0abfc;
+  --color-discovery-100: #4a044e;
+  --color-discovery-50: #3a0740;
+
+  --color-neutral-700: #cbd5df;
+  --color-neutral-600: #9aaabd;
+  --color-neutral-200: #263746;
+  --color-neutral-100: #1f2e3a;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.38);
+  --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.46);
+  --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.56);
 
   color-scheme: dark;
 }

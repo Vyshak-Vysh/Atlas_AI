@@ -18,12 +18,20 @@ from atlasai_db.exceptions import ConflictError, NotFoundError
 from atlasai_db.models.requirements import Requirement, RequirementComment
 from atlasai_db.repositories.audit import AuditEventRepository
 from atlasai_db.repositories.requirements import RequirementCommentRepository, RequirementRepository
-from atlasai_db.repositories.tenancy import MembershipRepository
+from atlasai_db.repositories.tenancy import MembershipRepository, PhaseRepository, SprintRepository
 from atlasai_domain.enums import AuditEventType, MembershipRole
 
 
 class InvalidAssigneeError(Exception):
     """assignee_id does not refer to a current member of this project."""
+
+
+class InvalidSprintError(Exception):
+    """sprint_id does not refer to a sprint in this project."""
+
+
+class InvalidPhaseError(Exception):
+    """phase_id does not refer to a phase in this project."""
 
 
 class RequirementHasEvidenceError(ConflictError):
@@ -61,6 +69,22 @@ async def update_requirement(
         )
         if role is None:
             raise InvalidAssigneeError("assignee is not a member of this project")
+
+    if "sprint_id" in changes and changes["sprint_id"] is not None:
+        try:
+            await SprintRepository(session, tenant_id=tenant_id, project_id=project_id).get_by_id(
+                changes["sprint_id"]
+            )
+        except NotFoundError as exc:
+            raise InvalidSprintError("sprint is not part of this project") from exc
+
+    if "phase_id" in changes and changes["phase_id"] is not None:
+        try:
+            await PhaseRepository(session, tenant_id=tenant_id, project_id=project_id).get_by_id(
+                changes["phase_id"]
+            )
+        except NotFoundError as exc:
+            raise InvalidPhaseError("phase is not part of this project") from exc
 
     audit_repo = AuditEventRepository(session, tenant_id=tenant_id)
     for field, new_value in changes.items():

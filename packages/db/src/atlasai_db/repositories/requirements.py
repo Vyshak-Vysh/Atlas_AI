@@ -4,7 +4,7 @@ delivery_records — all project-scoped."""
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -45,6 +45,7 @@ class RequirementRepository(ProjectScopedRepository[Requirement]):
         task_status: str | None = None,
         priority: str | None = None,
         assignee_id: uuid.UUID | None = None,
+        sprint_id: uuid.UUID | None = None,
     ) -> list[Requirement]:
         query = self._scoped_query().order_by(Requirement.key)
         if status is not None:
@@ -57,6 +58,8 @@ class RequirementRepository(ProjectScopedRepository[Requirement]):
             query = query.where(Requirement.priority == priority)
         if assignee_id is not None:
             query = query.where(Requirement.assignee_id == assignee_id)
+        if sprint_id is not None:
+            query = query.where(Requirement.sprint_id == sprint_id)
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
@@ -79,10 +82,12 @@ class RequirementRepository(ProjectScopedRepository[Requirement]):
         self, *, key: str, title: str, status: str, phase_id: uuid.UUID | None = None,
         description: str | None = None, acceptance_criteria: list[Any] | None = None,
         task_status: str = "TO_DO", priority: str = "NORMAL", assignee_id: uuid.UUID | None = None,
+        sprint_id: uuid.UUID | None = None, due_date: date | None = None,
     ) -> Requirement:
         requirement = Requirement(
             project_id=self.project_id,
             phase_id=phase_id,
+            sprint_id=sprint_id,
             key=key,
             title=title,
             description=description,
@@ -91,6 +96,7 @@ class RequirementRepository(ProjectScopedRepository[Requirement]):
             task_status=task_status,
             priority=priority,
             assignee_id=assignee_id,
+            due_date=due_date,
         )
         return await self.add(requirement)
 

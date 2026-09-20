@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useProjectOverview } from "@/hooks/useProjects";
 import { useCurrentRole } from "@/hooks/useCurrentWorkspace";
 import { useDeleteRequirement, useRequirement, useUpdateRequirement } from "@/hooks/useRequirements";
+import { useSprints } from "@/hooks/useSprints";
 import { ApiError } from "@/lib/api";
 import { roleHasPermission } from "@/lib/permissions";
 import { requirementStatusDisplay, taskPriorityDisplay, taskStatusDisplay, TASK_PRIORITIES, TASK_STATUS_COLUMNS } from "@/lib/status";
@@ -52,6 +53,7 @@ export function TaskDetailContent({
   const role = useCurrentRole();
   const { data, isLoading, error, refetch } = useRequirement(requirementId, projectId);
   const { data: overview } = useProjectOverview(projectId);
+  const { data: sprints } = useSprints(projectId);
   const updateRequirement = useUpdateRequirement(projectId);
   const deleteRequirement = useDeleteRequirement(projectId);
   const [tab, setTab] = useState<Tab>("details");
@@ -151,6 +153,28 @@ export function TaskDetailContent({
             disabled={!canAssign}
             onChange={(userId) => updateRequirement.mutate({ requirementId, assignee_id: userId })}
           />
+        </div>
+
+        <div>
+          <p style={{ margin: "0 0 var(--space-1)", fontSize: "var(--font-size-2xs)", color: "var(--text-tertiary)" }}>Sprint</p>
+          {canEdit ? (
+            <Select
+              value={requirement.sprint_id ?? ""}
+              onChange={(e) => updateRequirement.mutate({ requirementId, sprint_id: e.target.value || null })}
+              style={{ maxWidth: "10rem" }}
+            >
+              <option value="">No sprint</option>
+              {(sprints ?? []).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <span style={{ fontSize: "var(--font-size-sm)" }}>
+              {sprints?.find((s) => s.id === requirement.sprint_id)?.name ?? "No sprint"}
+            </span>
+          )}
         </div>
 
         <div>

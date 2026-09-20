@@ -3,23 +3,33 @@
 import { useQueries } from "@tanstack/react-query";
 import { FileSearch, Search } from "lucide-react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useState } from "react";
 
-import { useProjects } from "@/hooks/useProjects";
+import { useSpaceProjects } from "@/hooks/useSpaces";
 import { api } from "@/lib/api";
-import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Field";
 import { SkeletonLines } from "@/components/ui/Skeleton";
 
-export default function GlobalEvidencePage() {
-  const { data: projects, isLoading: projectsLoading } = useProjects();
+/**
+ * Evidence search scoped to one client's projects — the same underlying
+ * per-project search endpoint the workspace-wide Evidence search used
+ * (fanned out across every project you can see, mixing every client
+ * together), just narrowed to the projects that actually belong to this
+ * Space. No new backend search infrastructure: this reuses the exact
+ * `POST /api/v1/evidence/search` endpoint each project's own Evidence tab
+ * already calls, once per project in the space.
+ */
+export default function SpaceEvidencePage() {
+  const params = useParams<{ spaceId: string }>();
+  const { data: projects, isLoading: projectsLoading } = useSpaceProjects(params.spaceId);
   const [query, setQuery] = useState("");
   const activeQuery = query.trim();
 
   const results = useQueries({
     queries: (projects ?? []).map((project) => ({
-      queryKey: ["evidence-search", project.id, activeQuery],
+      queryKey: ["space-evidence-search", project.id, activeQuery],
       queryFn: () => api.searchEvidence(project.id, activeQuery, 5),
       enabled: activeQuery.length > 0,
     })),
@@ -30,29 +40,31 @@ export default function GlobalEvidencePage() {
 
   return (
     <div>
-      <PageHeader
-        title="Evidence"
-        description="Search across every project's connected evidence. Each project also has its own dedicated Evidence Explorer with upload and browse."
-      />
-
       <div className="search-field" style={{ marginBottom: "var(--space-5)" }}>
         <span className="search-field__icon">
           <Search size={16} aria-hidden />
         </span>
-        <Input placeholder="Search across all your projects…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <Input placeholder="Search evidence across this client's projects…" value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
 
       {!isSearching ? (
         projectsLoading ? (
           <SkeletonLines count={4} />
+        ) : !projects || projects.length === 0 ? (
+          <EmptyState icon={FileSearch} title="No projects in this space yet" description="Add a project to this space, then its evidence can be searched from here." />
         ) : (
           <>
             <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-4)" }}>
               Or jump straight into a project's evidence:
             </p>
             <div style={{ display: "grid", gap: "var(--space-2)" }}>
-              {(projects ?? []).map((p) => (
-                <Link key={p.id} href={`/app/projects/${p.id}/evidence`} className="card card--interactive" style={{ padding: "var(--space-4)", textDecoration: "none", color: "inherit" }}>
+              {projects.map((p) => (
+                <Link
+                  key={p.id}
+                  href={`/app/projects/${p.id}/evidence`}
+                  className="card card--interactive"
+                  style={{ padding: "var(--space-4)", textDecoration: "none", color: "inherit" }}
+                >
                   {p.name}
                 </Link>
               ))}
@@ -84,8 +96,8 @@ export default function GlobalEvidencePage() {
               </div>
             );
           })}
-          {results.every((r) => (r.data?.results.length ?? 0) === 0) && (
-            <EmptyState icon={FileSearch} title="No evidence found" description="No project's evidence matched that search." />
+          {results.length > 0 && results.every((r) => (r.data?.results.length ?? 0) === 0) && (
+            <EmptyState icon={FileSearch} title="No evidence found" description="No project in this space matched that search." />
           )}
         </div>
       )}

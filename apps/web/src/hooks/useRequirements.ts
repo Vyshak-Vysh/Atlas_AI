@@ -10,6 +10,7 @@ export interface RequirementFilters {
   taskStatus?: string;
   priority?: string;
   assigneeId?: string;
+  sprintId?: string;
 }
 
 export function useRequirements(projectId: string | undefined, filters?: RequirementFilters) {
@@ -36,9 +37,11 @@ export function useCreateRequirement(projectId: string) {
       title: string;
       status: string;
       phase_id?: string;
+      sprint_id?: string;
       description?: string;
       task_status?: string;
       priority?: string;
+      due_date?: string;
       assignee_id?: string;
     }) => api.createRequirement(projectId, body),
     onSuccess: () => {
@@ -59,9 +62,11 @@ export function useUpdateRequirement(projectId: string) {
       description?: string | null;
       status?: string;
       phase_id?: string | null;
+      sprint_id?: string | null;
       acceptance_criteria?: unknown[];
       task_status?: string;
       priority?: string;
+      due_date?: string | null;
       assignee_id?: string | null;
     }) => api.updateRequirement(requirementId, projectId, body),
     onSuccess: (_data, variables) => {

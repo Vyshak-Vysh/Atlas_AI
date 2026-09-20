@@ -10,6 +10,7 @@ import { actionStatusDisplay } from "@/lib/status";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { StatusBadge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Pagination, usePagination } from "@/components/ui/Pagination";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 
 const STATUS_OPTIONS = ["WAITING_APPROVAL", "ALL", "APPROVED", "REJECTED", "EXECUTED", "EXPIRED", "FAILED"];
@@ -17,14 +18,24 @@ const STATUS_OPTIONS = ["WAITING_APPROVAL", "ALL", "APPROVED", "REJECTED", "EXEC
 export default function GlobalApprovalsPage() {
   const router = useRouter();
   const [status, setStatus] = useState("WAITING_APPROVAL");
+  const [page, setPage] = useState(1);
   const { all, isLoading } = useActionsAcrossProjects(status === "ALL" ? undefined : status);
+  const { pageRows, page: currentPage, pageCount } = usePagination(all, page, setPage);
 
   return (
     <div>
       <PageHeader title="Approvals" description="Actions AtlasAI has proposed across every project, waiting for human authorization." />
 
       <div style={{ marginBottom: "var(--space-5)" }}>
-        <select className="select" style={{ maxWidth: "16rem" }} value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select
+          className="select"
+          style={{ maxWidth: "16rem" }}
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>
               {s === "ALL" ? "All statuses" : actionStatusDisplay(s).label}
@@ -49,7 +60,7 @@ export default function GlobalApprovalsPage() {
               </tr>
             </thead>
             <tbody>
-              {all.map(({ project, action }) => (
+              {pageRows.map(({ project, action }) => (
                 <tr key={action.id} className="is-clickable" onClick={() => router.push(`/app/projects/${project.id}/approvals/${action.id}`)}>
                   <td>{action.action_type.replaceAll("_", " ")}</td>
                   <td>{project.name}</td>
@@ -61,6 +72,7 @@ export default function GlobalApprovalsPage() {
               ))}
             </tbody>
           </table>
+          <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} totalItems={all.length} pageSize={25} />
         </div>
       )}
     </div>

@@ -21,6 +21,8 @@ from atlasai_api.schemas.requirements import (
 from atlasai_api.services.requirement_service import (
     CommentPermissionError,
     InvalidAssigneeError,
+    InvalidPhaseError,
+    InvalidSprintError,
     RequirementHasEvidenceError,
     add_comment,
     delete_comment,
@@ -31,7 +33,7 @@ from atlasai_api.services.requirement_service import (
 from atlasai_db.exceptions import NotFoundError
 from atlasai_db.repositories.audit import AuditEventRepository
 from atlasai_db.repositories.requirements import RequirementCommentRepository, RequirementRepository
-from atlasai_db.repositories.tenancy import MembershipRepository
+from atlasai_db.repositories.tenancy import MembershipRepository, PhaseRepository, SprintRepository
 from atlasai_domain.enums import AuditEventType, RequirementStatus, TaskPriority, TaskStatus
 from atlasai_security import Permission, role_has_permission
 
@@ -45,12 +47,18 @@ async def list_requirements(
     task_status: str | None = Query(default=None),
     priority: str | None = Query(default=None),
     assignee_id: uuid.UUID | None = Query(default=None),
+    sprint_id: uuid.UUID | None = Query(default=None),
     ctx: ProjectContext = Depends(require_project_membership_query),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[RequirementResponse]:
     repo = RequirementRepository(session, tenant_id=ctx.tenant_id, project_id=ctx.project_id)
     requirements = await repo.list_for_project(
-        status=status_filter, phase_id=phase_id, task_status=task_status, priority=priority, assignee_id=assignee_id
+        status=status_filter,
+        phase_id=phase_id,
+        task_status=task_status,
+        priority=priority,
+        assignee_id=assignee_id,
+        sprint_id=sprint_id,
     )
     return [RequirementResponse.model_validate(r) for r in requirements]
 
@@ -75,6 +83,26 @@ async def create_requirement(
     if await repo.get_by_key(body.key) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="a requirement with this key already exists")
 
+    if body.sprint_id is not None:
+        try:
+            await SprintRepository(session, tenant_id=ctx.tenant_id, project_id=ctx.project_id).get_by_id(
+                body.sprint_id
+            )
+        except NotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="sprint is not part of this project"
+            ) from exc
+
+    if body.phase_id is not None:
+        try:
+            await PhaseRepository(session, tenant_id=ctx.tenant_id, project_id=ctx.project_id).get_by_id(
+                body.phase_id
+            )
+        except NotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="phase is not part of this project"
+            ) from exc
+
     if body.assignee_id is not None:
         role = await MembershipRepository(session).get_project_role(
             project_id=ctx.project_id, user_id=body.assignee_id
@@ -89,10 +117,12 @@ async def create_requirement(
         title=body.title,
         status=req_status.value,
         phase_id=body.phase_id,
+        sprint_id=body.sprint_id,
         description=body.description,
         acceptance_criteria=body.acceptance_criteria,
         task_status=task_status.value,
         priority=priority.value,
+        due_date=body.due_date,
         assignee_id=body.assignee_id,
     )
     await AuditEventRepository(session, tenant_id=ctx.tenant_id).record(
@@ -176,6 +206,8 @@ async def patch_requirement(
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="requirement not found") from exc
     except InvalidAssigneeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except (InvalidSprintError, InvalidPhaseError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return RequirementResponse.model_validate(requirement)

@@ -26,7 +26,13 @@ from atlasai_api.schemas.projects import (
 from atlasai_api.schemas.tenants import UpdateMemberRoleRequest
 from atlasai_db.models.tenancy import User
 from atlasai_db.repositories.audit import AuditEventRepository
-from atlasai_db.repositories.tenancy import MembershipRepository, PhaseRepository, ProjectRepository, UserRepository
+from atlasai_db.repositories.tenancy import (
+    MembershipRepository,
+    PhaseRepository,
+    ProjectRepository,
+    SpaceRepository,
+    UserRepository,
+)
 from atlasai_domain.enums import AuditEventType, MembershipRole
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
@@ -45,9 +51,18 @@ async def create_project(
     if role not in _PROJECT_CREATOR_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="role cannot create projects")
 
+    if body.space_id is not None:
+        # 404s (not silently ignored) if the space belongs to a different
+        # tenant — prevents attaching a project to another tenant's space.
+        await SpaceRepository(session, tenant_id=body.tenant_id).get_by_id(body.space_id)
+
     project_repo = ProjectRepository(session, tenant_id=body.tenant_id)
     project = await project_repo.create(
-        name=body.name, client_name=body.client_name, code=body.code, timezone=body.timezone
+        name=body.name,
+        client_name=body.client_name,
+        code=body.code,
+        timezone=body.timezone,
+        space_id=body.space_id,
     )
     await MembershipRepository(session).add_project_member(
         project_id=project.id, user_id=user.id, role=role.value
@@ -231,8 +246,49 @@ async def update_project(
 ) -> ProjectResponse:
     if ctx.role not in _PROJECT_CREATOR_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="role cannot update this project")
+
+    if body.space_id is not None:
+        await SpaceRepository(session, tenant_id=ctx.tenant_id).get_by_id(body.space_id)
+
     project_repo = ProjectRepository(session, tenant_id=ctx.tenant_id)
     project = await project_repo.get_by_id(ctx.project_id)
-    project = await project_repo.update(project, name=body.name, client_name=body.client_name, status=body.status)
+    project = await project_repo.update(
+        project, name=body.name, client_name=body.client_name, status=body.status, space_id=body.space_id
+    )
     await session.commit()
     return ProjectResponse.model_validate(project)
+
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(
+    request: Request,
+    ctx: ProjectContext = Depends(require_project_membership),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Permanently deletes the project and everything scoped to it — tasks,
+    findings, agent runs, actions, connectors, phases, sprints, and project
+    memberships all cascade at the database level (every child table's
+    project_id FK is ON DELETE CASCADE). Evidence/source records are
+    deliberately NOT touched: they live at the tenant level and are
+    associated to projects via connector scopes (ADR-0008), since the same
+    synced document can be in scope for more than one project — deleting
+    one project must never delete evidence another project still relies
+    on. The audit event is recorded (and committed) before the delete so
+    "this project was deleted, by whom, when" survives in the tenant-wide
+    audit trail even though the project row itself is gone afterward."""
+    if ctx.role not in _PROJECT_CREATOR_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="role cannot delete this project")
+
+    project_repo = ProjectRepository(session, tenant_id=ctx.tenant_id)
+    project = await project_repo.get_by_id(ctx.project_id)
+
+    await AuditEventRepository(session, tenant_id=ctx.tenant_id).record(
+        event_type=AuditEventType.PROJECT_DELETED,
+        actor_id=ctx.user.id,
+        target_type="project",
+        target_id=project.id,
+        metadata={"name": project.name},
+        request_id=request.headers.get("x-request-id"),
+    )
+    await session.delete(project)
+    await session.commit()

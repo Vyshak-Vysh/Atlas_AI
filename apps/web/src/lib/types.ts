@@ -149,6 +149,7 @@ export interface TenantMemberDetailResponse {
 export interface ProjectResponse {
   id: string;
   tenant_id: string;
+  space_id: string | null;
   name: string;
   client_name: string | null;
   code: string | null;
@@ -171,6 +172,68 @@ export interface ProjectOverviewResponse {
   project: ProjectResponse;
   phases: PhaseResponse[];
   member_count: number;
+}
+
+export interface SpaceResponse {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface SpaceOverviewResponse {
+  space: SpaceResponse;
+  project_count: number;
+}
+
+export interface SpaceFindingItem {
+  project: ProjectResponse;
+  finding: FindingResponse;
+}
+
+export interface SpaceActionItem {
+  project: ProjectResponse;
+  action: ActionResponse;
+}
+
+export interface SpaceProjectSummary {
+  project: ProjectResponse;
+  total_requirements: number;
+  requirements_delivered: number;
+  total_findings: number;
+  pending_approvals: number;
+}
+
+export interface SpaceReportResponse {
+  space: SpaceResponse;
+  generated_at: string;
+  project_count: number;
+  total_requirements: number;
+  requirements_delivered: number;
+  total_findings: number;
+  findings_by_status: FindingStatusCount[];
+  total_pending_approvals: number;
+  projects: SpaceProjectSummary[];
+  recent_findings: SpaceFindingItem[];
+}
+
+export interface SprintResponse {
+  id: string;
+  project_id: string;
+  name: string;
+  sprint_number: number;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
+}
+
+export interface SprintDetailResponse {
+  sprint: SprintResponse;
+  task_count: number;
+  done_count: number;
 }
 
 export interface ProjectMemberDetailResponse {
@@ -365,6 +428,7 @@ export interface RequirementResponse {
   id: string;
   project_id: string;
   phase_id: string | null;
+  sprint_id: string | null;
   key: string;
   title: string;
   description: string | null;
@@ -372,6 +436,7 @@ export interface RequirementResponse {
   acceptance_criteria: unknown[];
   task_status: string;
   priority: string;
+  due_date: string | null;
   assignee_id: string | null;
   created_at: string;
   updated_at: string;

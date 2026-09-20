@@ -12,11 +12,13 @@ class CreateProjectRequest(BaseModel):
     client_name: str | None = Field(default=None, max_length=250)
     code: str | None = Field(default=None, max_length=80)
     timezone: str = "UTC"
+    space_id: uuid.UUID | None = None
 
 
 class ProjectResponse(BaseModel):
     id: uuid.UUID
     tenant_id: uuid.UUID
+    space_id: uuid.UUID | None
     name: str
     client_name: str | None
     code: str | None
@@ -76,3 +78,4 @@ class UpdateProjectRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=250)
     client_name: str | None = Field(default=None, max_length=250)
     status: str | None = None
+    space_id: uuid.UUID | None = None

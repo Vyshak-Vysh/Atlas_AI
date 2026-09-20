@@ -12,26 +12,30 @@ class CreateRequirementRequest(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     status: str
     phase_id: uuid.UUID | None = None
+    sprint_id: uuid.UUID | None = None
     description: str | None = None
     acceptance_criteria: list[Any] = Field(default_factory=list)
     task_status: str = "TO_DO"
     priority: str = "NORMAL"
+    due_date: datetime.date | None = None
     assignee_id: uuid.UUID | None = None
 
 
 class UpdateRequirementRequest(BaseModel):
     """All fields optional; the router calls `.model_dump(exclude_unset=True)`
     so a field the client omits is left untouched, while a field sent as
-    explicit `null` (e.g. `assignee_id`, `phase_id`) is actually cleared —
-    plain `None`-means-unchanged can't express that distinction."""
+    explicit `null` (e.g. `assignee_id`, `phase_id`, `sprint_id`) is actually
+    cleared — plain `None`-means-unchanged can't express that distinction."""
 
     title: str | None = Field(default=None, min_length=1, max_length=300)
     description: str | None = None
     status: str | None = None
     phase_id: uuid.UUID | None = None
+    sprint_id: uuid.UUID | None = None
     acceptance_criteria: list[Any] | None = None
     task_status: str | None = None
     priority: str | None = None
+    due_date: datetime.date | None = None
     assignee_id: uuid.UUID | None = None
 
 
@@ -39,6 +43,7 @@ class RequirementResponse(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
     phase_id: uuid.UUID | None
+    sprint_id: uuid.UUID | None
     key: str
     title: str
     description: str | None
@@ -46,6 +51,7 @@ class RequirementResponse(BaseModel):
     acceptance_criteria: list[Any]
     task_status: str
     priority: str
+    due_date: datetime.date | None
     assignee_id: uuid.UUID | None
     created_at: datetime.datetime
     updated_at: datetime.datetime

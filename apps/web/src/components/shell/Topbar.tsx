@@ -9,6 +9,8 @@ import { formatRelativeTime } from "@/lib/format";
 import { useUiStore, type ThemePreference } from "@/store/ui";
 import { Avatar } from "@/components/ui/Avatar";
 import { DropdownMenu, MenuItem, MenuSeparator } from "@/components/ui/DropdownMenu";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { BackButton } from "./BackButton";
 import { Breadcrumbs } from "./Breadcrumbs";
 
 const THEME_ICON: Record<ThemePreference, typeof Sun> = { light: Sun, dark: Moon, system: SunMoon };
@@ -26,15 +28,18 @@ export function Topbar() {
 
   return (
     <header className="app-topbar">
-      <button
-        type="button"
-        className="topbar-icon-btn mobile-nav-trigger"
-        onClick={() => setMobileNavOpen(true)}
-        aria-label="Open navigation"
-      >
-        <Menu size={18} aria-hidden />
-      </button>
+      <Tooltip label="Open navigation">
+        <button
+          type="button"
+          className="topbar-icon-btn mobile-nav-trigger"
+          onClick={() => setMobileNavOpen(true)}
+          aria-label="Open navigation"
+        >
+          <Menu size={18} aria-hidden />
+        </button>
+      </Tooltip>
 
+      <BackButton />
       <Breadcrumbs />
 
       <button
@@ -55,10 +60,12 @@ export function Topbar() {
 
       <DropdownMenu
         trigger={
-          <button type="button" className="topbar-icon-btn" aria-label="Notifications">
-            <Bell size={18} aria-hidden />
-            {notifications.length > 0 && <span className="topbar-icon-btn__dot" />}
-          </button>
+          <Tooltip label="Notifications">
+            <button type="button" className="topbar-icon-btn" aria-label="Notifications">
+              <Bell size={18} aria-hidden />
+              {notifications.length > 0 && <span className="topbar-icon-btn__dot" />}
+            </button>
+          </Tooltip>
         }
       >
         <p className="command-palette__group-label">Pending approvals</p>
@@ -87,9 +94,11 @@ export function Topbar() {
 
       <DropdownMenu
         trigger={
-          <button type="button" className="topbar-icon-btn" aria-label="Change theme">
-            <ThemeIcon size={18} aria-hidden />
-          </button>
+          <Tooltip label="Change theme">
+            <button type="button" className="topbar-icon-btn" aria-label="Change theme">
+              <ThemeIcon size={18} aria-hidden />
+            </button>
+          </Tooltip>
         }
       >
         <MenuItem icon={<Sun size={15} aria-hidden />} onClick={() => setTheme("light")}>

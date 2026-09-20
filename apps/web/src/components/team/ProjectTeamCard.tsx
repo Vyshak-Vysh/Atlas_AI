@@ -11,15 +11,17 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Input, Select } from "@/components/ui/Field";
+import { SkeletonLines } from "@/components/ui/Skeleton";
 
 /**
  * Project team roster with role assignment — collaboration/team-editor
  * surface reused by both the per-project Settings page and the
- * "Project Space" hub, rather than building a second team-editing UI.
+ * "My Work" hub, rather than building a second team-editing UI.
  */
 export function ProjectTeamCard({ projectId, canManage }: { projectId: string; canManage: boolean }) {
-  const { data: members, isLoading } = useProjectMembers(projectId);
+  const { data: members, isLoading, error: membersError, refetch } = useProjectMembers(projectId);
   const addMember = useAddProjectMember(projectId);
   const updateRole = useUpdateProjectMemberRole(projectId);
   const removeMember = useRemoveProjectMember(projectId);
@@ -45,8 +47,10 @@ export function ProjectTeamCard({ projectId, canManage }: { projectId: string; c
     <Card>
       <CardHeader title={<h2 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)" }}>Team</h2>} />
       <CardBody>
-        {isLoading ? (
-          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-tertiary)" }}>Loading…</p>
+        {membersError ? (
+          <ErrorState error={membersError} onRetry={() => refetch()} />
+        ) : isLoading ? (
+          <SkeletonLines count={3} />
         ) : (
           <div style={{ display: "grid", gap: "var(--space-3)" }}>
             {(members ?? []).map((member) => (

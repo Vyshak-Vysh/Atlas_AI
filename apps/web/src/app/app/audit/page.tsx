@@ -10,11 +10,13 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Field";
+import { Pagination, usePagination } from "@/components/ui/Pagination";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 
 export default function AuditLogPage() {
   const { data: events, isLoading, error, refetch } = useAuditEvents(500);
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
     if (!events) return [];
@@ -22,13 +24,21 @@ export default function AuditLogPage() {
     if (!q) return events;
     return events.filter((e) => auditEventLabel(e.event_type).toLowerCase().includes(q) || e.event_type.toLowerCase().includes(q) || (e.target_type ?? "").toLowerCase().includes(q));
   }, [events, query]);
+  const { pageRows, page: currentPage, pageCount } = usePagination(filtered, page, setPage, 50);
 
   return (
     <div>
       <PageHeader title="Audit log" description="A read-only record of sensitive actions across this workspace." />
 
       <div style={{ marginBottom: "var(--space-5)", maxWidth: "24rem" }}>
-        <Input placeholder="Filter by event type or target…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <Input
+          placeholder="Filter by event type or target…"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPage(1);
+          }}
+        />
       </div>
 
       {error ? (
@@ -49,7 +59,7 @@ export default function AuditLogPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((event) => {
+              {pageRows.map((event) => {
                 const Icon = auditEventIcon(event.event_type);
                 return (
                   <tr key={event.id}>
@@ -72,6 +82,7 @@ export default function AuditLogPage() {
               })}
             </tbody>
           </table>
+          <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} totalItems={filtered.length} pageSize={50} />
         </div>
       )}
     </div>
