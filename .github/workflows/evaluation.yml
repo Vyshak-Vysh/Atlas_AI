@@ -14,7 +14,7 @@ name: Evaluation
 # uses the project's own docker-compose file — the same command the README
 # gives for local development.
 #
-# It needs an ANTHROPIC_API_KEY repository secret. Without it the job exits
+# It needs a GEMINI_API_KEY repository secret. Without it the job exits
 # early and says so, rather than failing noisily on every scheduled run.
 
 on:
@@ -40,10 +40,10 @@ jobs:
       - name: Check for an API key
         id: guard
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          if [ -z "${ANTHROPIC_API_KEY}" ]; then
-            echo "No ANTHROPIC_API_KEY secret is configured; skipping the evaluation." >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "${GEMINI_API_KEY}" ]; then
+            echo "No GEMINI_API_KEY secret is configured; skipping the evaluation." >> "$GITHUB_STEP_SUMMARY"
             echo "have_key=false" >> "$GITHUB_OUTPUT"
           else
             echo "have_key=true" >> "$GITHUB_OUTPUT"
@@ -52,14 +52,14 @@ jobs:
       - name: Write .env for the stack
         if: steps.guard.outputs.have_key == 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           # docker-compose reads .env. Start from the committed example so
           # any new variable added there is picked up automatically, then
           # override only what CI needs.
           cp .env.example .env
           {
-            echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
+            echo "GEMINI_API_KEY=${GEMINI_API_KEY}"
             echo "ATLASAI_SECRET_KEY=eval-only-not-a-real-secret"
             echo "JWT_SIGNING_KEY=eval-only-not-a-real-secret"
           } >> .env

@@ -23,7 +23,7 @@ model had no tool access at all, which was inaccurate.
 ## Decision
 
 Introduce an `INVESTIGATE` state that runs a real tool-calling loop against
-the Anthropic Messages API. The model is given a closed registry of
+the Gemini function-calling API. The model is given a closed registry of
 read-only, project-scoped tools and decides which to call and with what
 arguments until it stops asking or a budget is spent.
 

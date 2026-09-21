@@ -1,32 +1,28 @@
-"""Anthropic provider adapter.
+"""Google Gemini provider adapter.
 
-Structured outputs use `client.messages.parse(..., output_format=SomeModel)`
--> `response.parsed_output` — the current, non-deprecated API (verified
-against the bundled claude-api skill, not assumed from training data).
-`response.stop_reason == "refusal"` is always checked before reading
-content; retries cover 429/5xx/network per Anthropic's documented typed
-exception hierarchy.
+Structured outputs use `generate_content` with
+`response_mime_type="application/json"` and `response_schema=SomeModel`
+-> `response.parsed` — the google-genai SDK's native constrained-decoding
+path (verified against the installed SDK, not assumed from training data).
+A refusal (blocked prompt, or a candidate that stopped for a safety
+reason) is always checked before reading content; retries cover 429/5xx/
+transport failures per the SDK's `ClientError`/`ServerError` split.
 """
 
 from __future__ import annotations
 
 from typing import TypeVar
 
-import anthropic
-from anthropic import AsyncAnthropic
+from google import genai
+from google.genai import types
 from pydantic import BaseModel
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential_jitter
 
+from atlasai_llm_gateway import _gemini
 from atlasai_llm_gateway.cost_tracking import TokenUsage
-from atlasai_llm_gateway.settings import AnthropicSettings
+from atlasai_llm_gateway.settings import GeminiSettings
 
 T = TypeVar("T", bound=BaseModel)
-
-_RETRYABLE_EXCEPTIONS = (
-    anthropic.RateLimitError,
-    anthropic.InternalServerError,
-    anthropic.APIConnectionError,
-)
 
 
 class LLMRefusalError(Exception):
@@ -48,10 +44,12 @@ class StructuredCompletion:
         self.prompt_version = prompt_version
 
 
-class AnthropicGateway:
+class GeminiGateway:
     def __init__(self) -> None:
-        self._settings = AnthropicSettings()
-        self._client = AsyncAnthropic(api_key=self._settings.anthropic_api_key)
+        self._settings = GeminiSettings()
+        # Built on first use: the SDK client cannot exist without a key, and
+        # constructing a gateway on a keyless deployment must not fail.
+        self._client: genai.Client | None = None
 
     @property
     def prompt_version(self) -> str:
@@ -66,8 +64,13 @@ class AnthropicGateway:
     def model_for_escalation(self) -> str:
         return self._settings.llm_model_escalation
 
+    def _get_client(self) -> genai.Client:
+        if self._client is None:
+            self._client = _gemini.build_client(self._settings)
+        return self._client
+
     @retry(
-        retry=retry_if_exception_type(_RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(_gemini.is_retryable),
         wait=wait_exponential_jitter(initial=1, max=20),
         stop=stop_after_attempt(4),
         reraise=True,
@@ -82,33 +85,42 @@ class AnthropicGateway:
         max_tokens: int | None = None,
     ) -> StructuredCompletion:
         self._settings.require_api_key()
-        response = await self._client.messages.parse(
-            model=model or self._settings.llm_model_default,
-            max_tokens=max_tokens or self._settings.llm_max_tokens_default,
-            system=system,
-            messages=[{"role": "user", "content": user_content}],
-            output_format=output_format,
+        resolved_model = model or self._settings.llm_model_default
+        response = await self._get_client().aio.models.generate_content(
+            model=resolved_model,
+            contents=user_content,
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                max_output_tokens=max_tokens or self._settings.llm_max_tokens_default,
+                response_mime_type="application/json",
+                response_schema=output_format,
+                # No tools are offered here, but the SDK still treats its
+                # automatic function calling as "on" unless told otherwise
+                # and logs a warning about it on every worker.
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+            ),
         )
 
-        if response.stop_reason == "refusal":
-            details = getattr(response, "stop_details", None)
-            category = getattr(details, "category", None) if details else None
-            explanation = getattr(details, "explanation", None) if details else None
+        refused = _gemini.refusal(response)
+        if refused is not None:
+            category, explanation = refused
             raise LLMRefusalError(category=category, explanation=explanation)
 
-        parsed = response.parsed_output
-        if parsed is None:
-            raise StructuredOutputError("model response did not include valid structured output")
+        # The SDK leaves `parsed` unset (rather than raising) when the text
+        # is not valid JSON for the schema - typically a MAX_TOKENS cut-off
+        # mid-document - so the finish reason is the useful diagnostic here.
+        parsed = response.parsed
+        if not isinstance(parsed, output_format):
+            raise StructuredOutputError(
+                "model response did not include valid structured output "
+                f"(finish_reason={_gemini.finish_reason_name(response)})"
+            )
 
-        usage = TokenUsage(
-            model=response.model,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
-            cache_read_input_tokens=getattr(response.usage, "cache_read_input_tokens", 0) or 0,
-        )
+        usage = _gemini.usage(response, requested_model=resolved_model)
         return StructuredCompletion(
-            parsed=parsed, usage=usage, model=response.model, prompt_version=self._settings.llm_prompt_version
+            parsed=parsed, usage=usage, model=usage.model, prompt_version=self._settings.llm_prompt_version
         )
 
     async def aclose(self) -> None:
-        await self._client.close()
+        if self._client is not None:
+            await self._client.aio.aclose()

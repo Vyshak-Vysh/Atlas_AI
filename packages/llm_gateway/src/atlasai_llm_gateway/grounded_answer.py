@@ -14,7 +14,7 @@ import uuid
 
 from atlasai_domain.contracts.evidence import CitationRef, EvidenceCandidate
 from atlasai_domain.contracts.findings import ContradictionEntry, FindingDraft, FindingOutput, TimelineEntry
-from atlasai_llm_gateway.client import AnthropicGateway, StructuredCompletion
+from atlasai_llm_gateway.client import GeminiGateway, StructuredCompletion
 from atlasai_llm_gateway.framing import SYSTEM_PROMPT_V1, build_evidence_block
 from atlasai_llm_gateway.schemas import CitationDraft, FindingLLMOutput
 
@@ -55,9 +55,7 @@ def _reconcile(llm_output: FindingLLMOutput, candidates: list[EvidenceCandidate]
         for c in llm_output.contradictions
     ]
     timeline = [
-        TimelineEntry(
-            at=t.at, label=t.label, citation=_resolve_citation(t.citation, by_id) if t.citation else None
-        )
+        TimelineEntry(at=t.at, label=t.label, citation=_resolve_citation(t.citation, by_id) if t.citation else None)
         for t in llm_output.timeline
     ]
 
@@ -85,7 +83,7 @@ def _build_user_content(question: str, candidates: list[EvidenceCandidate]) -> s
         f"{evidence_block if evidence_block else '(no evidence was retrieved for this question)'}\n\n"
         "For every citation you produce, set `evidence_chunk_id` to the exact evidence_chunk_id "
         "attribute of the <untrusted_evidence> tag you are citing (copy it verbatim), `citation_label` "
-        "to that tag's citation_label (e.g. \"E1\"), and `quote` to the exact short excerpt from that "
+        'to that tag\'s citation_label (e.g. "E1"), and `quote` to the exact short excerpt from that '
         "chunk that supports your claim."
     )
 
@@ -97,7 +95,7 @@ async def generate_grounded_answer(
     candidates: list[EvidenceCandidate],
     model: str | None = None,
 ) -> tuple[FindingOutput, StructuredCompletion]:
-    gateway = AnthropicGateway()
+    gateway = GeminiGateway()
     try:
         completion = await gateway.complete_structured(
             system=SYSTEM_PROMPT_V1,

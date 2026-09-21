@@ -3,7 +3,7 @@
 This is the test that answers "does the agent actually work?" without an
 API key. Only two things are faked, and both are network boundaries:
 
-*   the Anthropic HTTP call (`AnthropicGateway.complete_structured` and
+*   the Gemini HTTP call (`GeminiGateway.complete_structured` and
     `ToolLoopGateway._create`), and
 *   the embedder HTTP call (`EmbedderClient.embed_query`).
 
@@ -35,6 +35,7 @@ from typing import Any
 
 import pytest
 from _helpers import create_project, register
+from google.genai import types as genai_types
 from httpx import AsyncClient
 from sqlalchemy import select
 
@@ -52,7 +53,7 @@ from atlasai_db.repositories.evidence import (
 from atlasai_db.settings import EMBEDDING_DIMENSION
 from atlasai_domain.agent.contracts import ClassifyOutput
 from atlasai_domain.enums import AgentRunIntent, FindingStatus
-from atlasai_llm_gateway.client import AnthropicGateway, StructuredCompletion
+from atlasai_llm_gateway.client import GeminiGateway, StructuredCompletion
 from atlasai_llm_gateway.cost_tracking import TokenUsage
 from atlasai_llm_gateway.schemas import CitationDraft, FindingLLMOutput
 from atlasai_llm_gateway.tool_loop import ToolLoopGateway
@@ -77,23 +78,21 @@ _EXCLUSION_TEXT = (
 _CHUNK_ID_RE = re.compile(r'evidence_chunk_id="([0-9a-fA-F-]{36})"')
 
 
-class _FakeBlock:
-    def __init__(self, **kw: Any) -> None:
-        self.__dict__.update(kw)
-
-
-class _FakeUsage:
-    input_tokens = 120
-    output_tokens = 40
-
-
-class _FakeResponse:
-    def __init__(self, *, stop_reason: str, content: list[Any]) -> None:
-        self.stop_reason = stop_reason
-        self.content = content
-        self.model = "fake-model"
-        self.usage = _FakeUsage()
-        self.stop_details = None
+def _fake_response(parts: list[genai_types.Part]) -> genai_types.GenerateContentResponse:
+    """A provider response built from the real SDK types, so the fake
+    cannot drift from the shape `ToolLoopGateway` actually parses."""
+    return genai_types.GenerateContentResponse(
+        model_version="fake-model",
+        candidates=[
+            genai_types.Candidate(
+                content=genai_types.Content(role="model", parts=parts),
+                finish_reason=genai_types.FinishReason.STOP,
+            )
+        ],
+        usage_metadata=genai_types.GenerateContentResponseUsageMetadata(
+            prompt_token_count=120, candidates_token_count=40
+        ),
+    )
 
 
 async def _seed_evidence(session: Any, *, tenant_id: uuid.UUID, project_id: uuid.UUID) -> list[uuid.UUID]:
@@ -153,33 +152,28 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch, *, cite: str = "real") -> di
     monkeypatch.setattr(EmbedderClient, "embed_query", fake_embed_query)
     monkeypatch.setattr(EmbedderClient, "aclose", fake_aclose)
     monkeypatch.setattr(ToolLoopGateway, "aclose", fake_aclose)
-    monkeypatch.setattr(AnthropicGateway, "aclose", fake_aclose)
+    monkeypatch.setattr(GeminiGateway, "aclose", fake_aclose)
 
     async def fake_create(self: ToolLoopGateway, **kwargs: Any) -> Any:
         """Turn 1: ask for a search. Turn 2: stop. This is the shape of a
         real loop, so ToolExecutionContext.execute really runs the tool."""
         counters["tool_turns"] += 1
         if counters["tool_turns"] == 1:
-            return _FakeResponse(
-                stop_reason="tool_use",
-                content=[
-                    _FakeBlock(
-                        type="tool_use",
-                        id="toolu_fake_1",
-                        name="search_evidence",
-                        input={"query": "single sign-on Phase 1"},
+            return _fake_response(
+                [
+                    genai_types.Part(
+                        function_call=genai_types.FunctionCall(
+                            name="search_evidence", args={"query": "single sign-on Phase 1"}
+                        )
                     )
-                ],
+                ]
             )
-        return _FakeResponse(
-            stop_reason="end_turn",
-            content=[_FakeBlock(type="text", text="Searched for SSO in Phase 1 scope.")],
-        )
+        return _fake_response([genai_types.Part(text="Searched for SSO in Phase 1 scope.")])
 
     monkeypatch.setattr(ToolLoopGateway, "_create", fake_create)
 
     async def fake_structured(
-        self: AnthropicGateway, *, system: str, user_content: str, output_format: type, **kw: Any
+        self: GeminiGateway, *, system: str, user_content: str, output_format: type, **kw: Any
     ) -> StructuredCompletion:
         counters["structured_calls"] += 1
         usage = TokenUsage(model="fake-model", input_tokens=100, output_tokens=25)
@@ -207,7 +201,7 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch, *, cite: str = "real") -> di
             )
         return StructuredCompletion(parsed=parsed, usage=usage, model="fake-model", prompt_version="v1")
 
-    monkeypatch.setattr(AnthropicGateway, "complete_structured", fake_structured)
+    monkeypatch.setattr(GeminiGateway, "complete_structured", fake_structured)
     return counters
 
 
@@ -248,9 +242,7 @@ async def test_agent_run_produces_a_real_cited_finding(
     assert result.intent == AgentRunIntent.SCOPE_QUESTION.value
 
     async with session_factory() as session:
-        findings = (
-            (await session.execute(select(Finding).where(Finding.agent_run_id == run_id))).scalars().all()
-        )
+        findings = (await session.execute(select(Finding).where(Finding.agent_run_id == run_id))).scalars().all()
         assert len(findings) == 1, "exactly one finding should be persisted"
         finding = findings[0]
         assert finding.status == FindingStatus.IN_SCOPE_SUPPORTED.value
@@ -334,9 +326,7 @@ async def test_hallucinated_citation_fails_the_run_instead_of_persisting_it(
     assert "not present in the retrieved evidence packet" in str(result.error_json)
 
     async with session_factory() as session:
-        findings = (
-            (await session.execute(select(Finding).where(Finding.agent_run_id == run_id))).scalars().all()
-        )
+        findings = (await session.execute(select(Finding).where(Finding.agent_run_id == run_id))).scalars().all()
         assert findings == [], "a run with a hallucinated citation must persist no finding"
 
 
@@ -373,9 +363,7 @@ async def test_evidence_is_scoped_to_the_project_the_run_belongs_to(
     assert result.status == "COMPLETED", f"run failed: {result.error_json}"
 
     async with session_factory() as session:
-        finding = (
-            (await session.execute(select(Finding).where(Finding.agent_run_id == run_id))).scalars().one()
-        )
+        finding = (await session.execute(select(Finding).where(Finding.agent_run_id == run_id))).scalars().one()
         citations = (
             (await session.execute(select(FindingCitation).where(FindingCitation.finding_id == finding.id)))
             .scalars()

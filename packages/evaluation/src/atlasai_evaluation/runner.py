@@ -4,7 +4,7 @@ a running AtlasAI stack, tagging everything under a dedicated eval
 tenant/project per case rather than inventing a parallel evaluation
 schema (see the implementation plan's "Evaluation" section — ADR-0006).
 
-Requires a reachable API base_url with a working ANTHROPIC_API_KEY behind
+Requires a reachable API base_url with a working GEMINI_API_KEY behind
 it; this module makes real HTTP calls and does not mock the LLM.
 """
 

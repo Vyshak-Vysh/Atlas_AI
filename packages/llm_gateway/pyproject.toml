@@ -1,10 +1,11 @@
 [project]
 name = "atlasai-llm-gateway"
 version = "0.1.0"
-description = "Anthropic provider adapter, structured-output validation, retry/fallback, cost/token tracking."
+description = "Google Gemini provider adapter, structured-output validation, retry/fallback, cost/token tracking."
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "anthropic>=0.69",
+  "google-genai>=2.24",
+  "httpx>=0.28",
   "tenacity>=9.0",
   "atlasai-domain",
 ]

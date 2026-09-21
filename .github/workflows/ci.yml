@@ -146,7 +146,7 @@ jobs:
       CLAMAV_PORT: "3310"
       # Never a real key in CI. Integration tests must not reach a model;
       # anything that needs one belongs in the evaluation workflow.
-      ANTHROPIC_API_KEY: test-key-not-used
+      GEMINI_API_KEY: test-key-not-used
       ATLASAI_SECRET_KEY: ci-only-not-a-real-secret
       JWT_SIGNING_KEY: ci-only-not-a-real-secret
       JWT_ALGORITHM: HS256

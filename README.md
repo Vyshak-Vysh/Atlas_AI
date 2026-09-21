@@ -92,7 +92,7 @@ The loop's prose is never the answer. Its only durable output is the set of auth
 | Object storage | S3-compatible (MinIO in local dev) |
 | Malware scanning | ClamAV |
 | Embeddings | Local sentence-transformers model (`BAAI/bge-base-en-v1.5`) served by a dedicated embedder microservice |
-| LLM | Anthropic Claude (classify / default / escalation model tiers), via an internal LLM gateway with structured-output validation and cost tracking |
+| LLM | Google Gemini (classify / default / escalation model tiers), via an internal LLM gateway with structured-output validation and cost tracking |
 | Tooling | `uv` (Python workspace/dependency manager), `ruff` (lint), `mypy --strict` (types), `pytest` (tests) |
 | Infra | Docker Compose for local dev; each service has its own Dockerfile |
 
@@ -119,7 +119,7 @@ packages/
                 malware scanning, chunking). Gmail/MS Graph/Drive/Meetings/
                 Jira/Git-CI are defined in the provider enum and surfaced in
                 the UI as unavailable; their adapters are not yet written
-  llm_gateway/  Anthropic adapter, structured-output validation, the
+  llm_gateway/  Gemini adapter, structured-output validation, the
                 bounded tool-use loop, untrusted-evidence prompt framing,
                 cost tracking
   evaluation/   Fixture-driven evaluation harness (9 required categories)
@@ -134,14 +134,14 @@ tests/             unit/, integration/, evaluation/
 - **Docker Desktop** (with the WSL2 backend on Windows) — required to run Postgres, Redis, MinIO, ClamAV, and the embedder locally.
 - **[uv](https://docs.astral.sh/uv/)** — Python package/workspace manager, if you want to run services on the host instead of purely in Docker.
 - **Node.js 20+** and npm — for the frontend.
-- An **Anthropic API key** — required for the agent/LLM features to function.
+- A **Google Gemini API key** — required for the agent/LLM features to function.
 
 ## Getting started
 
 ```bash
 # 1. Configure environment
 cp .env.example .env
-# Fill in ANTHROPIC_API_KEY at minimum. Every other value already has a
+# Fill in GEMINI_API_KEY at minimum. Every other value already has a
 # workable local default in .env.example — change secrets before any real
 # deployment.
 
@@ -188,7 +188,7 @@ All configuration is documented with inline comments in [`.env.example`](.env.ex
 - **PostgreSQL / Redis / object storage** — connection details (sensible Docker defaults provided)
 - **Embedding service** — model name and vector dimension
 - **ClamAV** — malware-scanning host/port
-- **Anthropic** — API key and which Claude model tier handles classification, default reasoning, and escalation
+- **Gemini** — API key and which Gemini model tier handles classification, default reasoning, and escalation
 - **Auth/JWT** — token TTLs and signing key
 - **Agent run limits** — step/tool/timeout/token budgets
 - **Connectors** — manual upload needs no configuration and is the only implemented provider. The GitHub/Gmail/MS Graph/Google Drive/Meetings/Jira variables are placeholders for adapters that are not yet written; setting them does not enable a connector
@@ -214,7 +214,7 @@ the evaluation workflow instead.
 
 Yes. [`tests/integration/test_agent_pipeline.py`](tests/integration/test_agent_pipeline.py)
 drives a complete agent run against a real database, faking only the two network
-boundaries: the Anthropic HTTP call and the embedder HTTP call. Everything between
+boundaries: the Gemini HTTP call and the embedder HTTP call. Everything between
 them is the real system — the INVESTIGATE loop really dispatches tools, which
 really run project-scoped hybrid queries against Postgres and pgvector; RERANK
 really scores the rows; ANALYZE really reconciles citations; and FINDING really
@@ -245,7 +245,7 @@ uv run python -m atlasai_evaluation.cli --base-url http://localhost:8000 --outpu
 uv run python -m atlasai_evaluation.cli --summarize eval-report.json
 ```
 
-The harness exercises the real HTTP API end to end and needs a working `ANTHROPIC_API_KEY`. It scores retrieval recall@k, citation coverage, unsupported-assertion rate, conflict-detection precision, prompt-injection resistance and permission-boundary enforcement, and exits non-zero when any falls below its threshold — 100% for injection resistance and permission boundaries, 95% for citation coverage, 5% maximum for unsupported assertions. It runs weekly in [`.github/workflows/evaluation.yml`](.github/workflows/evaluation.yml) and publishes the metric table as a job summary.
+The harness exercises the real HTTP API end to end and needs a working `GEMINI_API_KEY`. It scores retrieval recall@k, citation coverage, unsupported-assertion rate, conflict-detection precision, prompt-injection resistance and permission-boundary enforcement, and exits non-zero when any falls below its threshold — 100% for injection resistance and permission boundaries, 95% for citation coverage, 5% maximum for unsupported assertions. It runs weekly in [`.github/workflows/evaluation.yml`](.github/workflows/evaluation.yml) and publishes the metric table as a job summary.
 
 ## What's built vs. what's flagged as follow-on
 

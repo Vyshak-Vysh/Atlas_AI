@@ -5,7 +5,7 @@
 # through the real manual-upload pipeline, asks `question` through the real
 # agent-run path, and checks the resulting finding's status against
 # `expected_status`. Run via `packages/evaluation`'s EvalHarness against a
-# live stack with a working ANTHROPIC_API_KEY — see
+# live stack with a working GEMINI_API_KEY — see
 # packages/evaluation/README (none yet; see the harness module docstring).
 
 cases:

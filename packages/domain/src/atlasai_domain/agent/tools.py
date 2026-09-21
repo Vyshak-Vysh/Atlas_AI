@@ -24,9 +24,11 @@ class ToolSpec(BaseModel):
     """A single tool as advertised to the model.
 
     `input_schema` is a JSON Schema object passed verbatim to the provider's
-    tool-definition field, so it must stay a plain dict rather than a
-    Pydantic model — providers reject unknown keywords that a model dump
-    would introduce.
+    tool-definition field (Gemini's `FunctionDeclaration.parameters_json_schema`,
+    which takes raw JSON Schema rather than the provider's own trimmed
+    `Schema` type), so it must stay a plain dict rather than a Pydantic
+    model — providers reject unknown keywords that a model dump would
+    introduce.
     """
 
     name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
@@ -34,7 +36,7 @@ class ToolSpec(BaseModel):
     input_schema: dict[str, Any]
 
     def to_provider_dict(self) -> dict[str, Any]:
-        return {"name": self.name, "description": self.description, "input_schema": self.input_schema}
+        return {"name": self.name, "description": self.description, "parameters_json_schema": self.input_schema}
 
 
 class ToolCall(BaseModel):

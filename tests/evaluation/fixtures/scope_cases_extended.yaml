@@ -13,7 +13,7 @@
 # system actually fails.
 #
 # Run via `packages/evaluation`'s EvalHarness against a live stack with a
-# working ANTHROPIC_API_KEY. See docs/EVALUATION.md.
+# working GEMINI_API_KEY. See docs/EVALUATION.md.
 
 cases:
   # ---------------------------------------------------------------- IN_SCOPE

@@ -1,5 +1,5 @@
 """CLASSIFY: determine intent and risk (TD_v2.md §5). Uses the cheap
-classify-tier model (Haiku by default) — this is a high-volume, low-
+classify-tier model (Gemini Flash-Lite by default) — this is a high-volume, low-
 complexity step, exactly the workload the model-tiering design in
 packages/llm_gateway exists for.
 """
@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 
 from ai_atlas.agent_runner.context import StepContext
 from atlasai_domain.agent.contracts import ClassifyOutput
-from atlasai_llm_gateway import AnthropicGateway
+from atlasai_llm_gateway import GeminiGateway
 
 _CLASSIFY_SYSTEM_PROMPT = """You classify a question asked of AtlasAI, an evidence-backed project \
 intelligence system. Given the question, determine:
@@ -24,7 +24,7 @@ informational lookup.
 
 async def run(ctx: StepContext, *, question: str) -> ClassifyOutput:
     started_at = datetime.now(UTC)
-    gateway = AnthropicGateway()
+    gateway = GeminiGateway()
     try:
         completion = await gateway.complete_structured(
             system=_CLASSIFY_SYSTEM_PROMPT,

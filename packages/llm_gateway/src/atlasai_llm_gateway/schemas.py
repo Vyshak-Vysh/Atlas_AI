@@ -46,7 +46,8 @@ class TimelineEntryDraft(BaseModel):
 
 class FindingLLMOutput(BaseModel):
     """The exact schema passed as `output_format` to
-    `client.messages.parse(...)`. No per-status required-field validation
+    `GeminiGateway.complete_structured(...)`, which hands it to the provider
+    as the JSON response schema. No per-status required-field validation
     here — that runs once citations are reconciled into a real
     `atlasai_domain.contracts.findings.FindingDraft` (see
     grounded_answer.py), which is the object that actually enforces
